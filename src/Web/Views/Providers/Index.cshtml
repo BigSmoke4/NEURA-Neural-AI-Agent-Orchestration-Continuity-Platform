@@ -1,0 +1,51 @@
+@model IEnumerable<Neura.Modules.ProviderIntegration.Domain.AIProviderAccount>
+@{ ViewData["Title"] = "Provider Management"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Provider Management</h1>
+    <p class="text-dim">Providers are connected explicitly via their official APIs. No passwords are ever stored here — only an opaque credential reference (wire to Data Protection / a secret manager in production).</p>
+
+    <form method="post" asp-action="Connect" style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+        <input type="hidden" name="userId" value="00000000-0000-0000-0000-000000000000" />
+        <select name="kind" class="btn">
+            <option>OpenAI</option>
+            <option>Anthropic</option>
+            <option>Google</option>
+            <option>LocalModel</option>
+        </select>
+        <input name="displayName" placeholder="Display name" required class="btn" />
+        <input name="apiKey" type="password" placeholder="API key (encrypted before storage, never shown again)" required class="btn" style="flex:1;" />
+        <button type="submit" class="btn btn--primary">Connect</button>
+    </form>
+
+    <p class="text-dim">Or, for providers that support it: <a href="/oauth/Google/start" style="color:var(--color-glow-cyan);">Connect Google via OAuth</a> (requires <code>Neura:OAuth:Google</code> configured with real Google Cloud OAuth client credentials — see docs/DEPLOYMENT.md). Anthropic does not currently publish a general OAuth2 flow for API key issuance, so use the API key field above for Anthropic.</p>
+
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Name</th><th>Kind</th><th>State</th><th>Last Health</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var p in Model)
+        {
+            <tr>
+                <td>@p.DisplayName</td>
+                <td>@p.Kind</td>
+                <td>@p.State</td>
+                <td>@(p.LastHealthMessage ?? "—")</td>
+                <td>
+                    <form method="post" asp-action="Disconnect" asp-route-id="@p.Id">
+                        @Html.AntiForgeryToken()
+                        <button class="btn btn--icon" type="submit">Disconnect</button>
+                    </form>
+                    <form method="post" asp-action="Rotate" asp-route-id="@p.Id" style="display:flex; gap:0.35rem; margin-top:0.35rem;">
+                        @Html.AntiForgeryToken()
+                        <input name="newApiKey" type="password" placeholder="New key" class="btn" style="width:120px;" />
+                        <button class="btn btn--icon" type="submit">Rotate</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <p class="text-dim">No providers connected — anything requiring one will show <b>NOT CONFIGURED</b> rather than fabricating a response.</p>
+    }
+</section>
