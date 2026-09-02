@@ -1,0 +1,36 @@
+@{ ViewData["Title"] = "Register"; var roles = (string[])(ViewBag.RegistrationRoles ?? new[] { "User", "Operator", "Auditor", "Admin" }); }
+<section class="panel" style="max-width:520px; margin:3rem auto;">
+    <h1 class="panel__title">Create your NEURA account</h1>
+    <p class="panel__hint">Choose your role. User accounts work immediately; Operator, Auditor, and Admin registration require a server-configured registration code.</p>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div style="color:var(--color-critical); margin-bottom:1rem;">
+            @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors)) { <p>@e.ErrorMessage</p> }
+        </div>
+    }
+    <form method="post" asp-action="Register">
+        @Html.AntiForgeryToken()
+        <label class="panel__hint">Email</label>
+        <input name="email" type="email" required autocomplete="email" class="btn" style="width:100%; margin:0.35rem 0 1rem;" />
+        <label class="panel__hint">Password (min 10 characters)</label>
+        <input name="password" type="password" required minlength="10" autocomplete="new-password" class="btn" style="width:100%; margin:0.35rem 0 1rem;" />
+        <label class="panel__hint">Account role</label>
+        <select id="registration-role" name="role" class="btn" style="width:100%; margin:0.35rem 0 1rem;">
+            @foreach (var role in roles) { <option value="@role">@role</option> }
+        </select>
+        <div id="role-code-wrap">
+            <label class="panel__hint">Role registration code</label>
+            <input name="roleCode" type="password" autocomplete="off" class="btn" style="width:100%; margin:0.35rem 0 1rem;" />
+            <p class="panel__hint">Required for roles above User. The server validates this code; it is never stored with the account.</p>
+        </div>
+        <button type="submit" class="btn btn--primary" style="width:100%;">Create account</button>
+    </form>
+</section>
+<script>
+(() => {
+  const role = document.getElementById('registration-role');
+  const code = document.getElementById('role-code-wrap');
+  const update = () => code.style.display = role.value === 'User' ? 'none' : 'block';
+  role.addEventListener('change', update); update();
+})();
+</script>

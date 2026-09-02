@@ -1,0 +1,31 @@
+@model IEnumerable<Neura.Modules.Observability.Domain.Notification>
+@{ ViewData["Title"] = "Notifications"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Notifications</h1>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>When</th><th>Kind</th><th>Message</th><th>Read</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var n in Model)
+        {
+            <tr style="@(n.IsRead ? "" : "font-weight:600;")">
+                <td>@n.CreatedAtUtc.ToString("u")</td>
+                <td>@n.Kind</td>
+                <td>@n.Message</td>
+                <td>@(n.IsRead ? "Yes" : "No")</td>
+                <td>
+                    @if (!n.IsRead)
+                    {
+                        <form method="post" asp-action="MarkRead" asp-route-id="@n.Id">
+                            <button class="btn btn--icon" type="submit">Mark read</button>
+                        </form>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <p class="text-dim">No notifications yet — running a mission that triggers a context warning or handoff will create one.</p>
+    }
+</section>
