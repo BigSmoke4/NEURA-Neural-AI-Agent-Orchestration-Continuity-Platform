@@ -1,7 +1,0 @@
-body { font-size: 14px; line-height: 1.5; }
-h1, h2, h3 { font-weight: 600; letter-spacing: 0.02em; margin: 0 0 0.5rem; }
-.panel__title {
-  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--color-text-dim); margin-bottom: 0.75rem;
-}
-.panel__hint { color: var(--color-text-dim); font-size: 0.8rem; line-height: 1.5; }
