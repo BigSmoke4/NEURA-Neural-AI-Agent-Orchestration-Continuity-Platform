@@ -1,0 +1,20 @@
+.btn {
+  background: linear-gradient(180deg, var(--color-metal-light), var(--color-metal));
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  box-shadow: var(--shadow-raised);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn:active { box-shadow: var(--shadow-inset); transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--color-glow-cyan); outline-offset: 2px; }
+.btn--primary { border-color: var(--color-glow-cyan); color: var(--color-glow-cyan); }
+.btn--icon { padding: 0.3rem 0.5rem; }
+.chip {
+  background: var(--color-metal); border: 1px solid var(--color-border);
+  color: var(--color-text-dim); padding: 0.3rem 0.7rem; border-radius: 999px;
+  font-size: 0.72rem; cursor: pointer;
+}
+.chip--active { color: var(--color-glow-cyan); border-color: var(--color-glow-cyan); }
