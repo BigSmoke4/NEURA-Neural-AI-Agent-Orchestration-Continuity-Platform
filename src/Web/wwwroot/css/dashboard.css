@@ -1,0 +1,8 @@
+.panel--events { overflow-y: auto; max-height: calc(100vh - 150px); }
+.event-feed li {
+  font-family: var(--font-mono); font-size: 0.72rem; padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border); color: var(--color-text-dim);
+}
+.event-feed li b { color: var(--color-text); }
+.event-feed li.level-warning { color: var(--color-warn); }
+.event-feed li.level-critical { color: var(--color-critical); }

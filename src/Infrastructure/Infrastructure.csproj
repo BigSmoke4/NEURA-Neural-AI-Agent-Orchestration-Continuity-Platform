@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Neura.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.30" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.30" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="8.0.30" />
+    <!-- ILogger<T> (used by SmtpEmailSender) lives here. Web.csproj gets
+         it for free via the ASP.NET Core shared framework; this plain
+         class library needs it explicitly, same issue as the earlier
+         IHttpClientFactory fix in ProviderIntegration.csproj. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.30" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.30" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.30" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Shared/Shared.csproj" />
+    <ProjectReference Include="../Modules/AgentManagement/AgentManagement.csproj" />
+    <ProjectReference Include="../Modules/ProviderIntegration/ProviderIntegration.csproj" />
+    <ProjectReference Include="../Modules/Orchestration/Orchestration.csproj" />
+    <ProjectReference Include="../Modules/ContextManagement/ContextManagement.csproj" />
+    <ProjectReference Include="../Modules/Handoff/Handoff.csproj" />
+    <ProjectReference Include="../Modules/Memory/Memory.csproj" />
+    <ProjectReference Include="../Modules/KnowledgeGraph/KnowledgeGraph.csproj" />
+    <ProjectReference Include="../Modules/Observability/Observability.csproj" />
+  </ItemGroup>
+</Project>

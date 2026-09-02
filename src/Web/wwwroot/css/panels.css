@@ -1,0 +1,23 @@
+.panel {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-inset), var(--shadow-raised);
+  padding: 1rem;
+}
+.panel--graph { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.panel--nav .nav-list li {
+  padding: 0.5rem 0.6rem; border-radius: 6px; color: var(--color-text-dim);
+  font-size: 0.85rem; cursor: default;
+}
+.panel__divider { height: 1px; background: var(--color-border); margin: 1rem 0; }
+.panel--inspector {
+  position: fixed; right: -420px; top: 70px; bottom: 40px; width: 400px;
+  transition: right 0.25s ease; z-index: 50;
+}
+.panel--inspector.open { right: 1rem; }
+.badge {
+  display: inline-block; margin-top: 0.75rem; font-family: var(--font-mono);
+  font-size: 0.65rem; letter-spacing: 0.1em; padding: 0.2rem 0.5rem;
+  border-radius: 4px; border: 1px solid var(--color-warn); color: var(--color-warn);
+}

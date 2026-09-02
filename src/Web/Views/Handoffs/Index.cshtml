@@ -1,0 +1,24 @@
+@model IEnumerable<Neura.Modules.Handoff.Domain.HandoffRecord>
+@{ ViewData["Title"] = "Handoff Center"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Handoff Center</h1>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Mission</th><th>Reason</th><th>State</th><th>From → To</th><th>Created</th></tr></thead>
+        <tbody>
+        @foreach (var h in Model)
+        {
+            <tr>
+                <td>@h.MissionId</td>
+                <td>@h.Reason</td>
+                <td>@h.State</td>
+                <td>@h.FromAgentId → @(h.ToAgentId?.ToString() ?? "—")</td>
+                <td>@h.CreatedAtUtc.ToString("u")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <p class="text-dim">No handoffs recorded yet. Note: the current OrchestrationEngine builds HandoffRecord objects in-memory during a run — persist them via NeuraDbContext.Handoffs.Add(...) in OrchestrationEngine or a domain-event handler to see them here.</p>
+    }
+</section>
