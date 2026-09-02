@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEURA — Neural AI Orchestration Platform</title>
+    <link rel="stylesheet" href="~/css/variables.css" />
+    <link rel="stylesheet" href="~/css/reset.css" />
+    <link rel="stylesheet" href="~/css/layout.css" />
+    <link rel="stylesheet" href="~/css/typography.css" />
+    <link rel="stylesheet" href="~/css/panels.css" />
+    <link rel="stylesheet" href="~/css/buttons.css" />
+    <link rel="stylesheet" href="~/css/neural-graph.css" />
+    <link rel="stylesheet" href="~/css/dashboard.css" />
+    <link rel="stylesheet" href="~/css/responsive.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <header class="topbar" role="banner">
+        <div class="topbar__brand">
+            <span class="topbar__logo" aria-hidden="true">◆</span>
+            <span class="topbar__title">NEURA</span>
+        </div>
+        <div class="topbar__status" aria-live="polite">
+            <span class="led led--online" aria-hidden="true"></span>
+            <span id="system-status-text">SYSTEM ONLINE</span>
+            <span class="topbar__divider">|</span>
+            <span id="agent-count-text">0 AGENTS</span>
+        </div>
+        <nav class="topbar__nav" aria-label="Primary">
+            <a href="/Brain">Brain</a>
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User")) { <a href="/Missions">Missions</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator")) { <a href="/Agents">Agents</a> }
+            @if (User.IsInRole("Admin")) { <a href="/Providers">Providers</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Handoffs">Handoffs</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Memory">Memory</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Knowledge">Knowledge</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Auditor")) { <a href="/Observability">Observability</a><a href="/Cost">Cost</a><a href="/Timeline">Timeline</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Context">Context</a> }
+            @if (User.IsInRole("Admin")) { <a href="/Security">Security</a><a href="/Sandbox">Sandbox</a><a href="/Users">Users</a><a href="/Settings">Settings</a> }
+        </nav>
+        <div class="topbar__nav">
+            <a href="/Notifications" title="Notifications">🔔</a>
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <form method="post" asp-controller="Account" asp-action="Logout" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn--icon">Sign out</button>
+                </form>
+            }
+            else
+            {
+                <a href="/Account/Login">Sign in</a>
+            }
+        </div>
+    </header>
+
+    <main id="main-content" role="main">
+        @RenderBody()
+    </main>
+
+    <footer class="statusbar" role="contentinfo" aria-label="System metrics">
+        <span>CPU <b id="metric-cpu">—</b></span>
+        <span>TOKENS <b id="metric-tokens">0</b></span>
+        <span>CONTEXT <b id="metric-context">0%</b></span>
+        <span>TASKS <b id="metric-tasks">0</b></span>
+        <span>HANDOFFS <b id="metric-handoffs">0</b></span>
+        <span>COST <b id="metric-cost">$0.00</b></span>
+        <span>HEALTH <b id="metric-health">OK</b></span>
+    </footer>
+
+    @RenderSection("Scripts", required: false)
+</body>
+</html>
