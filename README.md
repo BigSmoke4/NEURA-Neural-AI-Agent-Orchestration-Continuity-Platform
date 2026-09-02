@@ -326,4 +326,6 @@ gap from the previous pass.
 
 ## License
 
-Provided as-is for reference/portfolio use.
+NEURA is open-source software licensed under the MIT License.
+
+Copyright © 2026 Ahanaf Mokammel.
