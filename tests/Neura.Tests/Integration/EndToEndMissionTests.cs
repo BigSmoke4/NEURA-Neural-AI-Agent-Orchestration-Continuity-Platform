@@ -36,7 +36,7 @@ public class EndToEndMissionTests : IClassFixture<NeuraWebApplicationFactory>
     public async Task RegisterLoginCreateAndStartMission_CompletesViaBackgroundWorker()
     {
         var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
-        using var client = _factory.CreateDefaultClient();
+        using var client = _factory.CreateDefaultClient(handler);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
 
         // 1. GET the register page to obtain a real antiforgery token.

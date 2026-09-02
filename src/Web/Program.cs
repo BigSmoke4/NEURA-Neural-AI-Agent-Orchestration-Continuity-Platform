@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -201,7 +202,7 @@ builder.Services.AddOpenTelemetry()
 
 // ---- Health checks ----
 builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("Default") ?? string.Empty, name: "postgres");
+    .AddNpgSql(builder.Configuration.GetConnectionString("Default") ?? string.Empty, name: "postgres", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -243,8 +244,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthChecks("/health");
-app.MapHealthChecks("/health/live");
-app.MapHealthChecks("/health/ready");
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 
 app.MapControllerRoute(
     name: "default",

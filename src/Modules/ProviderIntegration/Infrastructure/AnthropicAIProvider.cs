@@ -75,11 +75,12 @@ public sealed class AnthropicAIProvider : IAIProvider
             modelId, 200000, true, true, price.InputPer1k, price.OutputPer1k));
     }
 
-    public async Task<ProviderHealth> GetHealthAsync(CancellationToken cancellationToken)
+    public Task<ProviderHealth> GetHealthAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(_apiKey))
-            return new ProviderHealth(false, "NOT CONFIGURED", null);
-        return new ProviderHealth(true, "OK", TimeSpan.Zero);
+        var health = string.IsNullOrEmpty(_apiKey)
+            ? new ProviderHealth(false, "NOT CONFIGURED", null)
+            : new ProviderHealth(true, "OK", TimeSpan.Zero);
+        return Task.FromResult(health);
     }
 
     private sealed class AnthropicResponsePayload
