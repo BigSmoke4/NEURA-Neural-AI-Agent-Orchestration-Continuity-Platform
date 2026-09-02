@@ -1,0 +1,41 @@
+@model IEnumerable<Neura.Infrastructure.Persistence.ApplicationUser>
+@{ ViewData["Title"] = "Users"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">User Management (Admin only)</h1>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Email</th><th>Roles</th><th>Assign</th></tr></thead>
+        <tbody>
+        @foreach (var u in Model)
+        {
+            var roles = ((Dictionary<Guid, IList<string>>)ViewBag.UserRoles)[u.Id];
+            <tr>
+                <td>@u.Email</td>
+                <td>
+                    @foreach (var r in roles)
+                    {
+                        <form method="post" asp-action="RemoveRole" style="display:inline;">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="userId" value="@u.Id" />
+                            <input type="hidden" name="role" value="@r" />
+                            <button type="submit" class="chip chip--active" title="Click to remove">@r ✕</button>
+                        </form>
+                    }
+                </td>
+                <td>
+                    <form method="post" asp-action="AssignRole" style="display:flex; gap:0.35rem;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="userId" value="@u.Id" />
+                        <select name="role" class="btn">
+                            @foreach (var r in (string[])ViewBag.AssignableRoles)
+                            {
+                                <option value="@r">@r</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn">Add</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</section>
