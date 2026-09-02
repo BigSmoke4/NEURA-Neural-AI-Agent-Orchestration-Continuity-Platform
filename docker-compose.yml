@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: neura
+      POSTGRES_USER: neura
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - neura-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neura"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${WEB_HOST_PORT:-8081}:8080"
+    environment:
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=neura;Username=neura;Password=${POSTGRES_PASSWORD:-devpassword}"
+      Neura__Mode: Simulation
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      Neura__Registration__RoleCodes__Operator: ${NEURA_OPERATOR_REGISTRATION_CODE:-}
+      Neura__Registration__RoleCodes__Auditor: ${NEURA_AUDITOR_REGISTRATION_CODE:-}
+      Neura__Registration__RoleCodes__Admin: ${NEURA_ADMIN_REGISTRATION_CODE:-}
+    volumes:
+      - neura-dp-keys:/app/dp-keys
+
+volumes:
+  neura-postgres-data:
+  neura-dp-keys:

@@ -1,0 +1,2 @@
+/* application-wide overrides / small utility classes not covered elsewhere */
+.text-dim { color: var(--color-text-dim); }

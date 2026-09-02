@@ -1,0 +1,12 @@
+@model Neura.Modules.AgentManagement.Domain.Agent
+@{ ViewData["Title"] = "Agent Details"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">@Model.Name</h1>
+    <p><b>Role:</b> @Model.Role</p>
+    <p><b>Model:</b> @Model.ModelId</p>
+    <p><b>Status:</b> @Model.Status</p>
+    <p><b>Capabilities:</b> @string.Join(", ", Model.Capabilities)</p>
+    <p><b>Context capacity:</b> @Model.ContextCapacityTokens tokens</p>
+    <p><b>Reliability score:</b> @Model.ReliabilityScore.ToString("P1")</p>
+    <p><b>Enabled:</b> @Model.Enabled</p>
+</section>

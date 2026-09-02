@@ -1,0 +1,69 @@
+@{
+    ViewData["Title"] = "Brain";
+}
+
+<section class="brain-layout">
+    <aside class="panel panel--nav" aria-label="Navigation">
+        <h2 class="panel__title">Navigation</h2>
+        <ul class="nav-list">
+            <li><a href="/Missions">Missions</a></li>
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator"))
+            { <li><a href="/Agents">Agents</a></li> }
+            <li><a href="/Memory">Memory</a></li>
+            <li><a href="/Knowledge">Knowledge</a></li>
+            <li><a href="/Handoffs">Handoffs</a></li>
+            @if (User.IsInRole("Admin") || User.IsInRole("Auditor"))
+            { <li><a href="/Observability">Analytics</a></li> }
+            @if (User.IsInRole("Admin"))
+            { <li><a href="/Security">Security</a></li> }
+        </ul>
+
+        <div class="panel__divider"></div>
+
+        <h2 class="panel__title">Demo</h2>
+        <p class="panel__hint">
+            Simulation Mode runs the deterministic Claude&nbsp;→&nbsp;ChatGPT
+            context-exhaustion handoff scenario. Everything on the graph is a
+            real event from the orchestration engine — nothing here is faked.
+        </p>
+        @Html.AntiForgeryToken()
+        <button id="run-demo-btn" class="btn btn--primary" type="button">
+            ▶ Run Simulation Demo
+        </button>
+        <span class="badge badge--simulation">SIMULATION</span>
+    </aside>
+
+    <div class="panel panel--graph" aria-label="Neural brain graph">
+        <div class="graph-toolbar" role="toolbar" aria-label="Graph filters">
+            <button class="chip chip--active" data-filter="all">All</button>
+            <button class="chip" data-filter="agents">Agents</button>
+            <button class="chip" data-filter="tasks">Tasks</button>
+            <button class="chip" data-filter="handoffs">Handoffs</button>
+            <button class="chip" data-filter="errors">Errors</button>
+        </div>
+        <div id="neural-graph" role="img" aria-label="Live neural graph of agents and data flow"></div>
+        <p class="sr-only" id="graph-text-alternative" aria-live="polite">
+            Neural graph activity will be announced here as it happens, for
+            screen-reader users and anyone with reduced-motion preferences.
+        </p>
+    </div>
+
+    <aside class="panel panel--events" aria-label="Live event feed">
+        <h2 class="panel__title">Live Events</h2>
+        <ul id="event-feed" class="event-feed"></ul>
+    </aside>
+</section>
+
+<section class="panel panel--inspector" id="inspector-drawer" aria-hidden="true">
+    <button id="inspector-close" class="btn btn--icon" aria-label="Close inspector">✕</button>
+    <div id="inspector-content"></div>
+</section>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="~/js/core/utils.js"></script>
+    <script src="~/js/graph/neural-graph.js"></script>
+    <script src="~/js/signalr/neural-connection.js"></script>
+    <script src="~/js/dashboard/dashboard.js"></script>
+}
