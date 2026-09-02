@@ -1,0 +1,11 @@
+@{ ViewData["Title"] = "Access Denied"; }
+<section class="panel" style="max-width:760px; margin:3rem auto;">
+    <h1 class="panel__title">Access denied</h1>
+    <p>Your account is signed in, but it does not have the role or permission required to access this page.</p>
+    @if (ViewBag.ReturnUrl is string returnUrl && !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+    { <p class="panel__hint">Requested page: <code>@returnUrl</code></p> }
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap; margin-top:1rem;">
+        <a class="btn btn--primary" href="/Brain">Return to Brain</a>
+        @if (User.IsInRole("Admin")) { <a class="btn" href="/Users">Manage roles</a> }
+    </div>
+</section>

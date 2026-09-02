@@ -1,0 +1,26 @@
+@{ ViewData["Title"] = "Observability"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Observability</h1>
+    <div style="display:flex; gap:2rem; margin-bottom:1.5rem;">
+        <div><span class="text-dim">Missions</span><h2>@ViewBag.MissionCount</h2></div>
+        <div><span class="text-dim">Agents</span><h2>@ViewBag.AgentCount</h2></div>
+        <div><span class="text-dim">Handoffs</span><h2>@ViewBag.HandoffCount</h2></div>
+    </div>
+
+    <h2 class="panel__title">Recent Audit Events</h2>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>When</th><th>Action</th><th>Target</th><th>Result</th></tr></thead>
+        <tbody>
+        @foreach (var e in (IEnumerable<Neura.Modules.Observability.Domain.AuditLogEntry>)ViewBag.RecentAudit)
+        {
+            <tr>
+                <td>@e.TimestampUtc.ToString("u")</td>
+                <td>@e.Action</td>
+                <td>@e.Target</td>
+                <td>@e.Result</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <p class="panel__hint" style="margin-top:1rem;">Request-level OpenTelemetry tracing is configured for ASP.NET Core instrumentation in Program.cs; exporting to Prometheus/Grafana/Jaeger is not wired up in this scaffold.</p>
+</section>
