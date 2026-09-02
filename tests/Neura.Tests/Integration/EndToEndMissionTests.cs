@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Mvc.Testing;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,8 +36,11 @@ public class EndToEndMissionTests : IClassFixture<NeuraWebApplicationFactory>
     [Fact]
     public async Task RegisterLoginCreateAndStartMission_CompletesViaBackgroundWorker()
     {
-        var handler = new HttpClientHandler { UseCookies = true, CookieContainer = new System.Net.CookieContainer() };
-        using var client = _factory.CreateDefaultClient(handler);
+        using var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
 
         // 1. GET the register page to obtain a real antiforgery token.

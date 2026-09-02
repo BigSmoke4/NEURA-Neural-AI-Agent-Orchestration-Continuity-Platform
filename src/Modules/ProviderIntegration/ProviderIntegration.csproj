@@ -10,7 +10,7 @@
          Web.csproj gets it for free via the ASP.NET Core shared framework
          (Microsoft.NET.Sdk.Web), but this is a plain class library, so it
          needs the package explicitly. -->
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.20" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Shared/Shared.csproj" />

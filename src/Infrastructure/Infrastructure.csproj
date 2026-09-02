@@ -14,9 +14,9 @@
          it for free via the ASP.NET Core shared framework; this plain
          class library needs it explicitly, same issue as the earlier
          IHttpClientFactory fix in ProviderIntegration.csproj. -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.20" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.20" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.20" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Shared/Shared.csproj" />
