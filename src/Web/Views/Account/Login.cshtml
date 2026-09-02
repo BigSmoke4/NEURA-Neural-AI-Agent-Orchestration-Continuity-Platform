@@ -1,0 +1,22 @@
+@{ ViewData["Title"] = "Login"; }
+<section class="panel" style="max-width:420px; margin:3rem auto;">
+    <h1 class="panel__title">Sign in to NEURA</h1>
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div style="color:var(--color-critical); margin-bottom:1rem;">
+            @foreach (var e in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+            {
+                <p>@e.ErrorMessage</p>
+            }
+        </div>
+    }
+    <form method="post" asp-action="Login" asp-route-returnUrl="@ViewBag.ReturnUrl">
+        @Html.AntiForgeryToken()
+        <label class="panel__hint">Email</label>
+        <input name="email" type="email" required class="btn" style="width:100%; margin:0.35rem 0 1rem;" />
+        <label class="panel__hint">Password</label>
+        <input name="password" type="password" required class="btn" style="width:100%; margin:0.35rem 0 1rem;" />
+        <button type="submit" class="btn btn--primary" style="width:100%;">Sign in</button>
+    </form>
+    <p class="panel__hint" style="margin-top:1rem;">No account? <a asp-action="Register" style="color:var(--color-glow-cyan);">Register</a></p>
+</section>

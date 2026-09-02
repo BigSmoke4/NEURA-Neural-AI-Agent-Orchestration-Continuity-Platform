@@ -1,0 +1,65 @@
+@model IEnumerable<Neura.Modules.ContextManagement.Domain.ContextHandoffPackage>
+@{ ViewData["Title"] = "Context Explorer"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Context Explorer</h1>
+    <p class="panel__hint">Structured handoff context packages built by the Context Continuity Engine, persisted in full. Click a package node to inspect it.</p>
+
+    <div id="context-graph" style="height:380px; background:var(--color-bg-panel-raised); border:1px solid var(--color-border); border-radius:8px; margin-bottom:1rem;" role="img" aria-label="Mission to task to context package graph"></div>
+    <p class="sr-only" id="context-graph-text-alt" aria-live="polite"></p>
+
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Mission</th><th>Task</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var p in Model)
+        {
+            <tr>
+                <td>@p.Mission</td><td>@p.CurrentTask</td><td>@p.Status</td><td>@p.CreatedAtUtc.ToString("u")</td>
+                <td><a asp-action="Details" asp-route-id="@p.Id">Inspect</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <p class="text-dim">No context packages recorded yet — run the Simulation Demo on the Brain screen to generate one.</p>
+    }
+</section>
+
+@section Scripts {
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const elements = @Html.Raw(ViewBag.ElementsJson);
+    if (!elements.length) return;
+
+    const cy = cytoscape({
+        container: document.getElementById('context-graph'),
+        elements: elements,
+        style: [
+            { selector: 'node', style: {
+                'background-color': '#232830', 'border-width': 2, 'border-color': '#38f0e0',
+                'label': 'data(label)', 'color': '#e6ecf1', 'font-size': 9,
+                'text-valign': 'bottom', 'text-margin-y': 6, 'width': 30, 'height': 30
+            }},
+            { selector: 'edge', style: {
+                'width': 1.5, 'line-color': '#2b3038', 'curve-style': 'bezier',
+                'target-arrow-shape': 'triangle', 'target-arrow-color': '#2b3038',
+                'label': 'data(label)', 'font-size': 8, 'color': '#93a0ad'
+            }}
+        ],
+        layout: { name: 'breadthfirst', directed: true, animate: false }
+    });
+
+    cy.on('tap', 'node[packageId]', (evt) => {
+        const packageId = evt.target.data('packageId');
+        document.getElementById('context-graph-text-alt').textContent = `Opening package ${packageId}`;
+        window.location.href = `/Context/Details/${packageId}`;
+    });
+
+    cy.on('tap', 'node', (evt) => {
+        if (!evt.target.data('packageId')) {
+            document.getElementById('context-graph-text-alt').textContent = `Selected: ${evt.target.data('label')}`;
+        }
+    });
+});
+</script>
+}
