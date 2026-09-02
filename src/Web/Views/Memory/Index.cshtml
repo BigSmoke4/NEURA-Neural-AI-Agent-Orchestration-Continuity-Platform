@@ -1,0 +1,29 @@
+@model IEnumerable<Neura.Modules.Memory.Domain.MemoryRecord>
+@{ ViewData["Title"] = "Memory Center"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Memory Center</h1>
+    <form method="get" style="margin-bottom:1rem;">
+        <input name="q" value="@ViewBag.Query" placeholder="Search memory content…" class="btn" style="width:300px;" />
+        <button type="submit" class="btn btn--primary">Search</button>
+    </form>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Type</th><th>Content</th><th>Importance</th><th>Confidence</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var m in Model)
+        {
+            <tr>
+                <td>@m.Type</td>
+                <td>@m.Content</td>
+                <td>@m.Importance</td>
+                <td>@m.Confidence</td>
+                <td>@m.CreatedAt.ToString("u")</td>
+                <td>
+                    <form method="post" asp-action="Delete" asp-route-id="@m.MemoryId">
+                        <button class="btn btn--icon" type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</section>
