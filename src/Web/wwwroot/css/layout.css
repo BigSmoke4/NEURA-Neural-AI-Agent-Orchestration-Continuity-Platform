@@ -1,0 +1,28 @@
+.topbar {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.65rem 1.25rem; background: linear-gradient(180deg, var(--color-metal-light), var(--color-metal));
+  border-bottom: 1px solid var(--color-border); box-shadow: var(--shadow-raised);
+}
+.topbar__brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; letter-spacing: 0.08em; }
+.topbar__logo { color: var(--color-glow-cyan); text-shadow: 0 0 8px var(--color-glow-cyan); }
+.topbar__status { display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-dim); }
+.topbar__divider { opacity: 0.4; }
+.topbar__nav { margin-left: auto; display: flex; gap: 1.25rem; }
+.topbar__nav a { color: var(--color-text-dim); text-decoration: none; font-size: 0.85rem; }
+.topbar__nav a:hover { color: var(--color-text); }
+
+.brain-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  gap: 1rem;
+  padding: 1rem;
+  min-height: calc(100vh - 110px);
+}
+
+.statusbar {
+  display: flex; gap: 1.5rem; padding: 0.5rem 1.25rem;
+  background: var(--color-bg-panel); border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono); font-size: 0.72rem; color: var(--color-text-dim);
+  position: sticky; bottom: 0;
+}
+.statusbar b { color: var(--color-text); }

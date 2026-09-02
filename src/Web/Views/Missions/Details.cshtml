@@ -1,0 +1,48 @@
+@model IEnumerable<Neura.Modules.Orchestration.Domain.AgentTask>
+@{
+    ViewData["Title"] = "Mission Details";
+    var mission = (Neura.Modules.Orchestration.Domain.Mission)ViewBag.Mission;
+}
+<section class="panel" style="margin:1rem; max-width:800px;">
+    <h1 class="panel__title">@mission.Title</h1>
+    <p class="text-dim">@mission.Objective</p>
+    <p><b>Status:</b> @mission.Status &nbsp; <b>Mode:</b> @mission.Mode</p>
+
+    <form method="post" asp-action="Start" asp-route-id="@mission.Id" style="margin:1rem 0;">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="btn btn--primary">▶ Start (queue for background worker)</button>
+    </form>
+
+    <h2 class="panel__title">Tasks</h2>
+    @foreach (var task in Model)
+    {
+        <div class="panel" style="margin-bottom:1rem;">
+            <p><b>@task.Title</b> — @task.Status</p>
+
+            <h3 class="panel__title" style="margin-top:0.75rem;">Reference material (@task.ReferenceMaterial.Count)</h3>
+            @if (task.ReferenceMaterial.Any())
+            {
+                <ul>
+                @foreach (var r in task.ReferenceMaterial)
+                {
+                    <li>
+                        <b>@r.TrustLevel</b> @(r.IsTrusted ? "" : "(untrusted)") — @r.SourceDescription
+                        <div class="text-dim" style="font-size:0.75rem; max-height:80px; overflow:auto;">@(r.Text.Length > 300 ? r.Text[..300] + "…" : r.Text)</div>
+                    </li>
+                }
+                </ul>
+            }
+            else
+            {
+                <p class="text-dim">None attached.</p>
+            }
+
+            <form method="post" asp-controller="TaskReference" asp-action="AttachFromUrl" style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="taskId" value="@task.Id" />
+                <input name="url" placeholder="https://... (fetched content is attached as UNTRUSTED reference material)" required class="btn" style="flex:1;" />
+                <button type="submit" class="btn">Attach URL</button>
+            </form>
+        </div>
+    }
+</section>

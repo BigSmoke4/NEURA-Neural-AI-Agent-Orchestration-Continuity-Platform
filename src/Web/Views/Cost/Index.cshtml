@@ -1,0 +1,33 @@
+@model IEnumerable<Neura.Modules.ProviderIntegration.Domain.CostRecord>
+@{ ViewData["Title"] = "Cost Center"; }
+<section class="panel" style="margin:1rem;">
+    <h1 class="panel__title">Cost Center</h1>
+    <h2>Total: @ViewBag.TotalCost.ToString("C4")</h2>
+
+    <h3 class="panel__title" style="margin-top:1rem;">By Provider</h3>
+    <ul>
+    @foreach (var row in ViewBag.ByProvider)
+    {
+        <li>@row.Provider: @(((decimal)row.Total).ToString("C4"))</li>
+    }
+    </ul>
+
+    <h3 class="panel__title" style="margin-top:1rem;">Recent Requests</h3>
+    <table style="width:100%; border-collapse:collapse;">
+        <thead><tr class="text-dim"><th>Provider</th><th>Model</th><th>Input</th><th>Output</th><th>Cost</th><th>When</th></tr></thead>
+        <tbody>
+        @foreach (var r in Model)
+        {
+            <tr>
+                <td>@r.Provider</td><td>@r.ModelId</td><td>@r.InputTokens</td>
+                <td>@r.OutputTokens</td><td>@r.EstimatedCost.ToString("C4")</td>
+                <td>@r.CreatedAtUtc.ToString("u")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (!Model.Any())
+    {
+        <p class="text-dim">No cost records yet. Real-mode provider adapters return EstimatedCost as 0m as a placeholder — compute it from AIModelCapabilities pricing and write a CostRecord per AI request to populate this screen.</p>
+    }
+</section>
