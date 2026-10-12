@@ -1,0 +1,57 @@
+name: EF migration scaffold
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_name:
+        description: "PascalCase migration name, for example AddEmailOutbox"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install matching EF Core tooling
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.30
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Validate migration name
+        env:
+          MIGRATION_NAME: ${{ inputs.migration_name }}
+        run: |
+          if [[ ! "$MIGRATION_NAME" =~ ^[A-Z][A-Za-z0-9_]*$ ]]; then
+            echo "Migration name must start with an uppercase letter and contain only letters, numbers, and underscores."
+            exit 1
+          fi
+
+      - name: Restore and scaffold migration
+        env:
+          NEURA_EF_CONNECTION_STRING: Host=localhost;Database=neura;Username=neura;Password=design-time-only
+          MIGRATION_NAME: ${{ inputs.migration_name }}
+        run: |
+          dotnet restore src/Web/Web.csproj
+          dotnet ef migrations add "$MIGRATION_NAME" \
+            --project src/Infrastructure/Infrastructure.csproj \
+            --startup-project src/Web/Web.csproj \
+            --context NeuraDbContext \
+            --output-dir Persistence/Migrations
+
+      - name: Upload generated migration and snapshot for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ef-migration-${{ inputs.migration_name }}
+          path: src/Infrastructure/Persistence/Migrations/
+          if-no-files-found: error
+          retention-days: 7

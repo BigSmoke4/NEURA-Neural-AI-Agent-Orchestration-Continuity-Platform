@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Neura.Infrastructure.Email;
 using Neura.Infrastructure.Persistence;
 using Neura.Infrastructure.Security;
 using Neura.Modules.ContextManagement.Domain;
@@ -76,14 +77,19 @@ builder.Services.AddScoped<Neura.Modules.Orchestration.Application.ICostSink, Ef
 builder.Services.AddScoped<Neura.Modules.Orchestration.Application.IContextPackageSink, EfContextPackageSink>();
 builder.Services.AddScoped<Neura.Modules.Orchestration.Application.IHandoffSink, EfHandoffSink>();
 builder.Services.AddScoped<Neura.Modules.Orchestration.Application.INotificationSink, EfNotificationSink>();
-builder.Services.Configure<Neura.Infrastructure.Email.SmtpOptions>(builder.Configuration.GetSection("Neura:Smtp"));
-builder.Services.AddSingleton<Neura.Modules.Orchestration.Application.IEmailSender, Neura.Infrastructure.Email.SmtpEmailSender>();
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Neura:Smtp"));
+builder.Services.Configure<EmailOutboxOptions>(builder.Configuration.GetSection("Neura:EmailOutbox"));
+builder.Services.AddSingleton<Neura.Modules.Orchestration.Application.IEmailTransport, SmtpEmailSender>();
+builder.Services.AddScoped<Neura.Modules.Orchestration.Application.IEmailSender, EfEmailOutboxSender>();
+builder.Services.AddSingleton<IEmailOutboxDispatcher, EfEmailOutboxDispatcher>();
 // Registered but never called automatically anywhere in this codebase —
 // see Neura.Modules.Execution.Domain.IExecutionSandbox's own doc comment.
 // Requires a Docker daemon reachable from the host running NEURA.
 builder.Services.AddSingleton<Neura.Modules.Execution.Domain.IExecutionSandbox,
     Neura.Modules.Execution.Infrastructure.DockerContainerSandbox>();
 builder.Services.AddHostedService<MissionWorker>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<EmailOutboxWorker>();
 builder.Services.AddScoped<IAuditLogger, EfAuditLogger>();
 
 // ---- Database ----

@@ -36,6 +36,7 @@ public class NeuraDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Gu
     public DbSet<CostRecord> CostRecords => Set<CostRecord>();
     public DbSet<ContextHandoffPackage> ContextPackages => Set<ContextHandoffPackage>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<EmailOutboxMessage> EmailOutboxMessages => Set<EmailOutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -113,6 +114,21 @@ public class NeuraDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Gu
             b.Property(p => p.Dependencies).HasConversion(listConverter).Metadata.SetValueComparer(comparer);
             b.Property(p => p.OpenQuestions).HasConversion(listConverter).Metadata.SetValueComparer(comparer);
             b.Property(p => p.RelevantMemory).HasConversion(listConverter).Metadata.SetValueComparer(comparer);
+        });
+
+        builder.Entity<EmailOutboxMessage>(b =>
+        {
+            b.HasKey(message => message.Id);
+            b.Property(message => message.ProtectedPayload).HasColumnType("text");
+            b.Property(message => message.LastFailureType).HasMaxLength(200);
+            b.HasIndex(message => new
+            {
+                message.SentAtUtc,
+                message.DeadLetteredAtUtc,
+                message.NextAttemptAtUtc,
+                message.LeaseExpiresAtUtc,
+                message.CreatedAtUtc
+            });
         });
     }
 

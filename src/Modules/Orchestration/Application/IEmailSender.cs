@@ -1,6 +1,6 @@
 namespace Neura.Modules.Orchestration.Application;
 
-/// <summary>Section 79: optional email delivery channel for notifications.</summary>
+/// <summary>Queues an email for durable delivery; implementations should return after the message is persisted.</summary>
 public interface IEmailSender
 {
     Task SendAsync(string toAddress, string subject, string body, CancellationToken ct = default);

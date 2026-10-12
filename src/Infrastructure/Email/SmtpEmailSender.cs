@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Mail;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Neura.Modules.Orchestration.Application;
 
@@ -18,29 +17,21 @@ public sealed class SmtpOptions
 }
 
 /// <summary>
-/// SMTP delivery for operational notifications and Identity account flows.
-/// Optional notifications remain in-app-only when Host is unset; Staging/Production
-/// startup separately requires TLS-enabled SMTP for confirmation and recovery
-/// email. Passwords can be supplied through a mounted file.
+/// SMTP transport used only by the durable email-outbox worker. Staging/Production
+/// startup requires TLS-enabled SMTP for confirmation and recovery email.
+/// Passwords can be supplied through a mounted file.
 /// </summary>
-public sealed class SmtpEmailSender : IEmailSender
+public sealed class SmtpEmailSender : IEmailTransport
 {
     private readonly SmtpOptions _options;
-    private readonly ILogger<SmtpEmailSender> _logger;
 
-    public SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
+    public SmtpEmailSender(IOptions<SmtpOptions> options)
+        => _options = options.Value;
 
     public async Task SendAsync(string toAddress, string subject, string body, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(_options.Host))
-        {
-            _logger.LogDebug("SMTP not configured (Neura:Smtp:Host unset); skipping email delivery.");
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_options.Host))
+            throw new InvalidOperationException("SMTP transport is not configured; the email remains pending in the outbox.");
 
         using var client = new SmtpClient(_options.Host, _options.Port)
         {

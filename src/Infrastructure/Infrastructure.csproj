@@ -13,10 +13,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.30" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="8.0.30" />
-    <!-- ILogger<T> (used by SmtpEmailSender) lives here. Web.csproj gets
-         it for free via the ASP.NET Core shared framework; this plain
-         class library needs it explicitly, same issue as the earlier
-         IHttpClientFactory fix in ProviderIntegration.csproj. -->
+    <!-- ILogger<T> lives in the ASP.NET Core shared framework for Web but
+         this plain class library needs the abstractions explicitly. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />

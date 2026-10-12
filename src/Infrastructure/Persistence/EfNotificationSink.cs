@@ -4,11 +4,10 @@ using Neura.Modules.Orchestration.Application;
 namespace Neura.Infrastructure.Persistence;
 
 /// <summary>
-/// Persists every notification, and additionally emails it when SMTP is
-/// configured and the kind is significant enough to warrant it
-/// (SecurityEvent, AgentFailure, ProviderDisconnected, CostThreshold —
-/// not routine context warnings, to avoid inbox noise). The email leg is
-/// entirely optional: SmtpEmailSender no-ops silently if unconfigured.
+/// Persists every notification and queues an encrypted email for significant
+/// kinds (SecurityEvent, AgentFailure, ProviderDisconnected, CostThreshold —
+/// not routine context warnings). The SMTP worker retries delivery from the
+/// durable outbox; an unconfigured relay does not mark the message as sent.
 /// </summary>
 public sealed class EfNotificationSink : INotificationSink
 {
