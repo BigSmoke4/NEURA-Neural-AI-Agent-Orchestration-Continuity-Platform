@@ -4,6 +4,7 @@ using Neura.Infrastructure.Persistence;
 using Neura.Modules.AgentManagement.Domain;
 using Neura.Modules.ContextManagement.Domain;
 using Neura.Modules.Handoff.Domain;
+using Neura.Modules.KnowledgeGraph.Domain;
 using Neura.Modules.Memory.Domain;
 using Neura.Modules.Observability.Domain;
 using Neura.Modules.Orchestration.Domain;
