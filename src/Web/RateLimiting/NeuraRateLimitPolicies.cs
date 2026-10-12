@@ -48,7 +48,7 @@ public static class NeuraRateLimitPolicies
     {
         if (remoteAddress is null)
             return "unknown";
-        if (remoteAddress.IsIPv4MappedToIPv6())
+        if (remoteAddress.IsIPv4MappedToIPv6)
             remoteAddress = remoteAddress.MapToIPv4();
         return remoteAddress.ToString();
     }

@@ -100,7 +100,7 @@ return {1, 0}
 
         var globalWindowMilliseconds = ToMilliseconds(globalQuota.Window);
         var namedWindowMilliseconds = namedQuota is null ? 0 : ToMilliseconds(namedQuota.Window);
-        var result = (RedisResult[])await _database.ScriptEvaluateAsync(
+        var result = (RedisResult[]?)await _database.ScriptEvaluateAsync(
                 AcquireScript,
                 new[] { globalKey, namedKey },
                 new RedisValue[]
@@ -112,7 +112,7 @@ return {1, 0}
                 })
             .WaitAsync(cancellationToken);
 
-        if (result.Length != 2)
+        if (result is null || result.Length != 2)
             throw new InvalidOperationException("Redis returned an invalid distributed rate-limit decision.");
 
         var isAllowed = (long)result[0] == 1;

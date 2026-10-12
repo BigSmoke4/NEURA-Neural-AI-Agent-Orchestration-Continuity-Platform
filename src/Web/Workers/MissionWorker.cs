@@ -156,8 +156,8 @@ public sealed class MissionWorker : BackgroundService
                     return;
                 }
 
-                primaryAgent = selected.Primary.Agent;
-                fallbackAgent = selected.Fallback?.Agent;
+                primaryAgent = selected.Primary.Candidate.Agent;
+                fallbackAgent = selected.Fallback?.Candidate.Agent;
                 task.Assign(primaryAgent.Id);
 
                 await _events.PublishAsync(NeuralEventTypes.RoutingDecision, new
@@ -167,18 +167,18 @@ public sealed class MissionWorker : BackgroundService
                     TaskId = task.Id,
                     SelectedAgentId = primaryAgent.Id,
                     SelectedAgentName = primaryAgent.Name,
-                    SelectedProvider = selected.Primary.Provider.Kind.ToString(),
+                    SelectedProvider = selected.Primary.Candidate.Provider.Kind.ToString(),
                     SelectedModel = primaryAgent.ModelId,
                     SelectedScore = selected.Primary.Score,
                     Alternatives = selected.Alternatives
                 }, ct);
 
-                primaryProvider = _providerFactory.Create(selected.Primary.Provider.Kind,
-                    selected.Primary.Provider.ProtectedCredentialRef);
+                primaryProvider = _providerFactory.Create(selected.Primary.Candidate.Provider.Kind,
+                    selected.Primary.Candidate.Provider.ProtectedCredentialRef);
                 if (selected.Fallback is not null)
                 {
-                    fallbackProvider = _providerFactory.Create(selected.Fallback.Provider.Kind,
-                        selected.Fallback.Provider.ProtectedCredentialRef);
+                    fallbackProvider = _providerFactory.Create(selected.Fallback.Candidate.Provider.Kind,
+                        selected.Fallback.Candidate.Provider.ProtectedCredentialRef);
                 }
             }
 
