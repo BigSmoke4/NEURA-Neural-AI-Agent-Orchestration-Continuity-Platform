@@ -64,6 +64,43 @@ jobs:
         # GitHub's check annotations expose test failures even when raw runner
         # log downloads are unavailable to contributors.
 
+  # One-time scaffold for this release gate. Remove this temporary job after
+  # downloading and reviewing its migration artifact into the source tree.
+  scaffold-initial-migration:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'arena/048f16f8-neura-neural-ai-agent-orchestr'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install matching EF Core tooling
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.30
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Scaffold the reviewed model baseline
+        env:
+          NEURA_EF_CONNECTION_STRING: Host=localhost;Database=neura;Username=neura;Password=design-time-only
+        run: |
+          dotnet restore src/Web/Web.csproj
+          dotnet ef migrations add InitialBaseline \
+            --project src/Infrastructure/Infrastructure.csproj \
+            --startup-project src/Web/Web.csproj \
+            --context NeuraDbContext \
+            --output-dir Persistence/Migrations
+
+      - name: Upload baseline migration and snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: neura-initial-baseline
+          path: src/Infrastructure/Persistence/Migrations/
+          if-no-files-found: error
+          retention-days: 7
+
   browser-e2e:
     runs-on: ubuntu-latest
     needs: build-and-test
