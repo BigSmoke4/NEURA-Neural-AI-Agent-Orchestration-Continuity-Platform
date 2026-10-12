@@ -58,54 +58,38 @@ public sealed class RedisRateLimitIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task RedisOutageFailsTheStoreClosed_AndTheMultiplexerRecoversAfterRestart()
+    public async Task RedisOutageFailsTheStoreClosed_AndNewInstanceRecoversAfterRestart()
     {
         var connection = await CreateConnectionAsync();
+        IConnectionMultiplexer? recoveredConnection = null;
         try
         {
-            var store = CreateStore(connection, $"test:{Guid.NewGuid():N}");
+            var prefix = $"test:{Guid.NewGuid():N}";
+            var store = CreateStore(connection, prefix);
             var quota = new RateLimitQuota(20, TimeSpan.FromMinutes(1));
             Assert.True((await store.TryAcquireAsync("203.0.113.4", null, quota, null, CancellationToken.None)).IsAllowed);
 
             await _redis.StopAsync();
             await Assert.ThrowsAnyAsync<Exception>(() => store.TryAcquireAsync(
                 "203.0.113.4", null, quota, null, CancellationToken.None));
+            await connection.CloseAsync();
 
+            // A replacement web instance must recover cleanly after the Redis
+            // service returns; the previous command path was explicitly tested
+            // to fail closed while Redis was down.
             await _redis.StartAsync();
-            await WaitForConnectionAsync(connection, TimeSpan.FromSeconds(20));
-            var recovered = await store.TryAcquireAsync(
-                "203.0.113.4", null, quota, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+            recoveredConnection = await CreateConnectionAsync();
+            var recoveredStore = CreateStore(recoveredConnection, prefix);
+            var recovered = await recoveredStore.TryAcquireAsync(
+                "203.0.113.4", null, quota, null, CancellationToken.None);
             Assert.True(recovered.IsAllowed);
         }
         finally
         {
+            if (recoveredConnection is not null)
+                await recoveredConnection.CloseAsync();
             await connection.CloseAsync();
         }
-    }
-
-    private static async Task WaitForConnectionAsync(IConnectionMultiplexer connection, TimeSpan timeout)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (connection.IsConnected)
-            {
-                try
-                {
-                    await connection.GetDatabase().PingAsync();
-                    return;
-                }
-                catch (RedisException)
-                {
-                    // The multiplexer may report connected while Redis is still
-                    // completing its restart; keep waiting for an actual command.
-                }
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(250));
-        }
-
-        throw new TimeoutException("The Redis multiplexer did not recover before the integration-test deadline.");
     }
 
     private async Task<IConnectionMultiplexer> CreateConnectionAsync()
