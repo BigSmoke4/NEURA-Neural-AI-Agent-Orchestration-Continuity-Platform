@@ -16,10 +16,6 @@ of fabricated completion, handoffs are persisted, queued missions survive
 process restarts, provider/agent ownership is enforced, event delivery is
 tenant-scoped, and URL ingestion is hardened against SSRF.
 
-The current environment does not have the .NET SDK or Docker daemon, so I
-could not run `dotnet build`, the xUnit suite, PostgreSQL integration tests,
-or the Playwright job here. Run the CI workflow before merging or deploying.
-
 ## Security and operational foundations
 
 - **Encrypted credentials at rest.** Provider API keys are encrypted via
