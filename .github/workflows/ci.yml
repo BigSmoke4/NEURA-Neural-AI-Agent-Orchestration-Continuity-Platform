@@ -68,9 +68,13 @@ jobs:
   # downloading and reviewing its migration artifact into the source tree.
   scaffold-initial-migration:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'arena/048f16f8-neura-neural-ai-agent-orchestr'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -92,6 +96,16 @@ jobs:
             --startup-project src/Web/Web.csproj \
             --context NeuraDbContext \
             --output-dir Persistence/Migrations
+
+      - name: Commit generated baseline to the review branch
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/Infrastructure/Persistence/Migrations
+          git commit -m "Add EF Core initial schema baseline"
+          git push origin "HEAD:${BRANCH_NAME}"
 
       - name: Upload baseline migration and snapshot
         uses: actions/upload-artifact@v4
