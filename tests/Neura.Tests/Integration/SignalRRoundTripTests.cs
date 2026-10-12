@@ -66,7 +66,10 @@ public class SignalRRoundTripTests : IClassFixture<NeuraWebApplicationFactory>, 
         _connection = new HubConnectionBuilder()
             .WithUrl(new Uri(_baseAddress, "/hubs/neural"), options =>
             {
-                options.Cookies = cookies;
+                // TestServer's custom handler is not an HttpClientHandler, so it
+                // cannot apply HttpConnectionOptions.Cookies itself. Forward the
+                // authenticated cookies explicitly on SignalR's HTTP requests.
+                options.Headers["Cookie"] = GetHubCookieHeader(cookies);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
             })
             .Build();
@@ -91,7 +94,7 @@ public class SignalRRoundTripTests : IClassFixture<NeuraWebApplicationFactory>, 
         await using var otherConnection = new HubConnectionBuilder()
             .WithUrl(new Uri(_baseAddress, "/hubs/neural"), options =>
             {
-                options.Cookies = otherCookies;
+                options.Headers["Cookie"] = GetHubCookieHeader(otherCookies);
                 options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
             })
             .Build();
@@ -123,6 +126,15 @@ public class SignalRRoundTripTests : IClassFixture<NeuraWebApplicationFactory>, 
         await ownerReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await Task.Delay(TimeSpan.FromMilliseconds(250));
         Assert.False(otherReceived.Task.IsCompleted, "A different authenticated user received another user's mission event.");
+    }
+
+    private string GetHubCookieHeader(CookieContainer cookies)
+    {
+        var header = cookies.GetCookieHeader(new Uri(_baseAddress, "/hubs/neural"));
+        if (!header.Contains(".AspNetCore.Identity.Application=", StringComparison.Ordinal))
+            throw new InvalidOperationException("The authenticated Identity cookie was not captured for the SignalR connection.");
+
+        return header;
     }
 
     private async Task<CookieContainer> RegisterAdditionalUserAsync()

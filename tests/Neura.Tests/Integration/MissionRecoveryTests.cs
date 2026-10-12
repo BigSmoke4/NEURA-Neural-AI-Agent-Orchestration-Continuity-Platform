@@ -177,8 +177,9 @@ public sealed class MissionRecoveryTests
     private static ServiceProvider CreateServices(RecordingEventPublisher events, MissionRecoveryOptions options)
     {
         var services = new ServiceCollection();
+        var databaseName = $"mission-recovery-{Guid.NewGuid():N}";
         services.AddLogging();
-        services.AddDbContext<NeuraDbContext>(builder => builder.UseInMemoryDatabase($"mission-recovery-{Guid.NewGuid():N}"));
+        services.AddDbContext<NeuraDbContext>(builder => builder.UseInMemoryDatabase(databaseName));
         services.AddSingleton(options);
         services.AddSingleton<INeuralEventPublisher>(events);
         return services.BuildServiceProvider();

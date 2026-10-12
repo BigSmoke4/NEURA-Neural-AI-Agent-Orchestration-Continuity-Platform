@@ -51,7 +51,8 @@ public sealed class OrchestrationEngineTests
         Assert.Null(result.Output);
         Assert.Equal(TaskStatus2.Failed, task.Status);
         Assert.Equal(MissionStatus.Failed, mission.Status);
-        Assert.Contains("safe provider failure", result.Error);
+        Assert.Equal("Provider request failed; inspect protected server logs using the AI request ID.", result.Error);
+        Assert.DoesNotContain("safe provider failure", result.Error!);
     }
 
     [Fact]
