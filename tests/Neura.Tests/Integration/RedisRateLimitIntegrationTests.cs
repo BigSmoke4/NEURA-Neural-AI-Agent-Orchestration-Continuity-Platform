@@ -72,6 +72,7 @@ public sealed class RedisRateLimitIntegrationTests : IAsyncLifetime
                 "203.0.113.4", null, quota, null, CancellationToken.None));
 
             await _redis.StartAsync();
+            await WaitForConnectionAsync(connection, TimeSpan.FromSeconds(20));
             var recovered = await store.TryAcquireAsync(
                 "203.0.113.4", null, quota, null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
             Assert.True(recovered.IsAllowed);
@@ -80,6 +81,31 @@ public sealed class RedisRateLimitIntegrationTests : IAsyncLifetime
         {
             await connection.CloseAsync();
         }
+    }
+
+    private static async Task WaitForConnectionAsync(IConnectionMultiplexer connection, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (connection.IsConnected)
+            {
+                try
+                {
+                    await connection.GetDatabase().PingAsync();
+                    return;
+                }
+                catch (RedisException)
+                {
+                    // The multiplexer may report connected while Redis is still
+                    // completing its restart; keep waiting for an actual command.
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+        }
+
+        throw new TimeoutException("The Redis multiplexer did not recover before the integration-test deadline.");
     }
 
     private async Task<IConnectionMultiplexer> CreateConnectionAsync()
