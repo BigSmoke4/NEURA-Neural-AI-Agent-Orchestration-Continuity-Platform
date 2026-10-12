@@ -81,8 +81,8 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         await ExpectTextAsync(page, "Browser E2E Mission");
         await ExpectTextAsync(page, "Prove the UI itself works, not just the HTTP API");
 
-        // 4. Click the real Start button rendered on that page.
-        await page.ClickAsync("button:has-text('Start')");
+        // 4. Click the real queue action rendered on that page.
+        await page.ClickAsync("button:has-text('Queue mission')");
         await page.WaitForURLAsync($"{baseUrl}/Missions/Details/**");
     }
 
