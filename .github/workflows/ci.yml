@@ -107,7 +107,39 @@ jobs:
       - name: Browser E2E tests
         env:
           NEURA_E2E_BASE_URL: http://127.0.0.1:5080
-        run: dotnet test tests/Neura.E2E.Tests/Neura.E2E.Tests.csproj -c Release --no-build --verbosity normal
+        run: dotnet test tests/Neura.E2E.Tests/Neura.E2E.Tests.csproj -c Release --no-build --verbosity normal --logger "trx;LogFileName=neura-e2e-tests.trx"
+
+      - name: Annotate browser E2E failure details
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          namespace = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          failures = []
+          for path in glob.glob("tests/Neura.E2E.Tests/**/neura-e2e-tests.trx", recursive=True):
+              root = ET.parse(path).getroot()
+              for result in root.findall(".//trx:UnitTestResult", namespace):
+                  if result.get("outcome") != "Failed":
+                      continue
+                  name = result.get("testName", "unknown browser test")
+                  error = result.find("trx:Output/trx:ErrorInfo", namespace)
+                  message = error.findtext("trx:Message", default="", namespaces=namespace) if error is not None else ""
+                  stack = error.findtext("trx:StackTrace", default="", namespaces=namespace) if error is not None else ""
+                  failures.append(f"{name}: {message.strip()}\n{stack.strip()}".strip()[:3000])
+
+          def escape_command_data(value):
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          for detail in failures[:20]:
+              print(f"::error title=Browser E2E test failure::{escape_command_data(detail)}")
+          if not failures:
+              print("No failed browser E2E test details were found in TRX output.")
+          elif len(failures) > 20:
+              print(f"::error title=Browser E2E failure summary::Showing 20 of {len(failures)} failures.")
+          PY
 
       - name: Stop NEURA browser E2E server
         if: always()
