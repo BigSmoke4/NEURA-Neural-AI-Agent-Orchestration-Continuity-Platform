@@ -1,34 +1,28 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Neura.Modules.Orchestration.Application;
 
 namespace Neura.Web.Hubs;
 
 /// <summary>
-/// SignalR hub broadcasting real neural activity events to the Brain
-/// dashboard. Clients join the "brain" group to receive live updates.
+/// Authenticated realtime endpoint. Clients are placed into a server-derived
+/// per-user group; only Admin/Auditor principals also receive the operations
+/// stream. Clients cannot invoke a method to join arbitrary groups.
 /// </summary>
-public class NeuralHub : Hub
+[Authorize]
+public sealed class NeuralHub : Hub
 {
-    public const string BrainGroup = "brain";
+    public const string OperationsGroup = "neura-operations";
+
+    public static string UserGroup(Guid userId) => $"neura-user-{userId:N}";
 
     public override async Task OnConnectedAsync()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, BrainGroup);
+        if (Guid.TryParse(Context.UserIdentifier, out var userId))
+            await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(userId));
+
+        if (Context.User?.IsInRole("Admin") == true || Context.User?.IsInRole("Auditor") == true)
+            await Groups.AddToGroupAsync(Context.ConnectionId, OperationsGroup);
+
         await base.OnConnectedAsync();
     }
-}
-
-public sealed class SignalRNeuralEventPublisher : INeuralEventPublisher
-{
-    private readonly IHubContext<NeuralHub> _hub;
-
-    public SignalRNeuralEventPublisher(IHubContext<NeuralHub> hub) => _hub = hub;
-
-    public Task PublishAsync(string eventType, object payload, CancellationToken ct = default)
-        => _hub.Clients.Group(NeuralHub.BrainGroup).SendAsync("NeuralEvent", new
-        {
-            type = eventType,
-            timestamp = DateTime.UtcNow,
-            payload
-        }, ct);
 }

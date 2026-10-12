@@ -6,7 +6,7 @@
     <p><b>Current task:</b> @Model.CurrentTask</p>
     <p><b>Status:</b> @Model.Status</p>
 
-    <div id="package-graph" style="height:420px; background:var(--color-bg-panel-raised); border:1px solid var(--color-border); border-radius:8px; margin:1rem 0;" role="img" aria-label="Package contents graph, grouped by category"></div>
+    <div id="package-graph" data-elements="@ViewBag.ElementsJson" style="height:420px; background:var(--color-bg-panel-raised); border:1px solid var(--color-border); border-radius:8px; margin:1rem 0;" role="img" aria-label="Package contents graph, grouped by category"></div>
     <p class="sr-only" id="package-graph-text-alt" aria-live="polite"></p>
 
     @{
@@ -38,32 +38,6 @@
 </section>
 
 @section Scripts {
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const elements = @Html.Raw(ViewBag.ElementsJson);
-    if (!elements.length) return;
-
-    const cy = cytoscape({
-        container: document.getElementById('package-graph'),
-        elements: elements,
-        style: [
-            { selector: 'node', style: {
-                'background-color': '#232830', 'border-width': 2, 'border-color': '#4c8dff',
-                'label': 'data(label)', 'color': '#e6ecf1', 'font-size': 9,
-                'text-valign': 'bottom', 'text-margin-y': 6, 'width': 26, 'height': 26,
-                'text-wrap': 'wrap', 'text-max-width': '80px'
-            }},
-            { selector: 'edge', style: {
-                'width': 1.5, 'line-color': '#2b3038', 'curve-style': 'bezier',
-                'target-arrow-shape': 'triangle', 'target-arrow-color': '#2b3038'
-            }}
-        ],
-        layout: { name: 'breadthfirst', directed: true, animate: false, spacingFactor: 1.2 }
-    });
-
-    cy.on('tap', 'node', (evt) => {
-        document.getElementById('package-graph-text-alt').textContent = `Selected: ${evt.target.data('label')}`;
-    });
-});
-</script>
+    <script src="~/vendor/cytoscape/cytoscape.min.js" integrity="sha256-XztbUpVG1a8fxWKFkK8DO3RRGltveJ9fRoKEWGMii5E=" crossorigin="anonymous" asp-append-version="true"></script>
+    <script src="~/js/context/context-details.js" asp-append-version="true"></script>
 }

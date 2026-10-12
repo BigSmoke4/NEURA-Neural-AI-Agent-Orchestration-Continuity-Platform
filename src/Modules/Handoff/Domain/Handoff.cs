@@ -52,6 +52,10 @@ public static class HandoffValidator
     public static HandoffValidationResult Validate(ContextHandoffPackage package)
     {
         var missing = new List<string>();
+        if (package.MissionId == Guid.Empty) missing.Add("missionId");
+        if (package.TaskId == Guid.Empty) missing.Add("taskId");
+        if (package.FromAgentId == Guid.Empty) missing.Add("fromAgentId");
+        if (string.IsNullOrWhiteSpace(package.Mission)) missing.Add("mission");
         if (string.IsNullOrWhiteSpace(package.CurrentTask)) missing.Add("currentTask");
         if (string.IsNullOrWhiteSpace(package.Status)) missing.Add("status");
         if (package.RemainingWork.Count == 0 && package.Status != "Completed") missing.Add("remainingWork");

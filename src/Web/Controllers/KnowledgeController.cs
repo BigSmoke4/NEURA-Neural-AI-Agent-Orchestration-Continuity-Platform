@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
@@ -10,22 +11,51 @@ namespace Neura.Web.Controllers;
 [Authorize(Policy = "ViewMemory")]
 public class KnowledgeController : Controller
 {
+    private const int MaxGraphNodes = 500;
+    private const int MaxGraphEdges = 1_000;
+
     private readonly NeuraDbContext _db;
     public KnowledgeController(NeuraDbContext db) => _db = db;
 
     public async Task<IActionResult> Index(CancellationToken ct)
     {
-        var nodes = await _db.KnowledgeNodes.ToListAsync(ct);
-        var edges = await _db.KnowledgeEdges.ToListAsync(ct);
+        var visibleNodes = ResourceScope.KnowledgeNodes(_db.KnowledgeNodes, _db, User);
+        var totalNodeCount = await visibleNodes.CountAsync(ct);
+        var nodes = await visibleNodes
+            .OrderBy(node => node.Name)
+            .ThenBy(node => node.Id)
+            .Take(MaxGraphNodes)
+            .ToListAsync(ct);
 
-        // Cytoscape element JSON for the interactive graph, built server-side
-        // from real KnowledgeNodes/KnowledgeEdges rows — the same rendering
-        // approach as the Brain dashboard's neural graph, applied here too.
-        var elements = nodes.Select(n => new { data = new { id = n.Id.ToString(), label = $"{n.Name} ({n.Type})" } })
-            .Concat(edges.Select(e => (object)new { data = new { id = e.Id.ToString(), source = e.FromNodeId.ToString(), target = e.ToNodeId.ToString(), label = e.Type.ToString() } }));
+        var displayedNodeIds = nodes.Select(node => node.Id).ToArray();
+        var visibleEdges = ResourceScope.KnowledgeEdges(_db.KnowledgeEdges, _db, User)
+            .Where(edge => displayedNodeIds.Contains(edge.FromNodeId) && displayedNodeIds.Contains(edge.ToNodeId));
+        var totalEdgeCount = await visibleEdges.CountAsync(ct);
+        var edges = await visibleEdges
+            .OrderBy(edge => edge.Id)
+            .Take(MaxGraphEdges)
+            .ToListAsync(ct);
+
+        // Bound both the DB result and serialized graph payload so a large
+        // project cannot produce an unbounded Razor response or canvas graph.
+        var elements = nodes.Select(node => (object)new
+            { data = new { id = node.Id.ToString(), label = $"{node.Name} ({node.Type})" } })
+            .Concat(edges.Select(edge => (object)new
+            {
+                data = new
+                {
+                    id = edge.Id.ToString(),
+                    source = edge.FromNodeId.ToString(),
+                    target = edge.ToNodeId.ToString(),
+                    label = edge.Type.ToString()
+                }
+            }));
 
         ViewBag.ElementsJson = JsonSerializer.Serialize(elements);
         ViewBag.Edges = edges;
+        ViewBag.TotalNodeCount = totalNodeCount;
+        ViewBag.TotalEdgeCount = totalEdgeCount;
+        ViewBag.GraphTruncated = totalNodeCount > nodes.Count || totalEdgeCount > edges.Count;
         return View(nodes);
     }
 }

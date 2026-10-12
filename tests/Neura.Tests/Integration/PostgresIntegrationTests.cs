@@ -1,22 +1,30 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Neura.Infrastructure.Email;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.AgentManagement.Domain;
+using Neura.Modules.Handoff.Domain;
+using Neura.Modules.Orchestration.Application;
+using Neura.Modules.Orchestration.Domain;
+using Neura.Web.Workers;
 using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Neura.Tests.Integration;
 
 /// <summary>
-/// Real integration test against an actual PostgreSQL instance, spun up
-/// on demand in a Docker container via Testcontainers — not EF Core's
-/// InMemory provider. Confirms migrations/mappings genuinely work
-/// against Postgres (list-to-string value converters, Identity's own
-/// schema, etc.), which InMemory silently tolerates but a real
-/// relational engine will not if a mapping is wrong.
+/// Relational smoke test against an actual PostgreSQL instance started
+/// on demand through Testcontainers, not EF Core's InMemory provider.
+/// Applies the checked-in EF migration to an empty PostgreSQL database,
+/// round-trips an Agent, exercises stale-mission recovery, and verifies that
+/// two independent outbox dispatchers cannot both claim the same email.
 ///
-/// Requires a Docker daemon reachable from wherever `dotnet test` runs
-/// (including CI) — see .github/workflows/ci.yml. Skips gracefully if
-/// Docker isn't available rather than failing the whole suite.
+/// Requires a Docker daemon reachable from `dotnet test` (including CI).
+/// Container startup failures intentionally fail the test fixture rather
+/// than producing a false-green PostgreSQL test result.
 /// </summary>
 public class PostgresIntegrationTests : IAsyncLifetime
 {
@@ -27,38 +35,19 @@ public class PostgresIntegrationTests : IAsyncLifetime
         .WithPassword("test_password")
         .Build();
 
-    private bool _dockerAvailable = true;
+    public Task InitializeAsync() => _container.StartAsync();
 
-    public async Task InitializeAsync()
-    {
-        try
-        {
-            await _container.StartAsync();
-        }
-        catch
-        {
-            _dockerAvailable = false;
-        }
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (_dockerAvailable)
-            await _container.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _container.DisposeAsync();
 
     [Fact]
-    public async Task CanCreateSchemaAndPersistAnAgent_AgainstRealPostgres()
+    public async Task CanPersistAgentAndRecoverStaleMission_AgainstRealPostgres()
     {
-        if (!_dockerAvailable)
-            return; // Docker not available in this environment — see class doc comment.
-
         var options = new DbContextOptionsBuilder<NeuraDbContext>()
             .UseNpgsql(_container.GetConnectionString())
             .Options;
 
         await using var db = new NeuraDbContext(options);
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.MigrateAsync();
 
         var agent = Agent.Create("Test Agent", "desc", Guid.NewGuid(), "model-x", "Coding Agent", 50_000,
             new[] { AgentCapability.Coding, AgentCapability.Testing });
@@ -70,5 +59,125 @@ public class PostgresIntegrationTests : IAsyncLifetime
         Assert.Equal("Test Agent", reloaded!.Name);
         Assert.Contains(AgentCapability.Coding, reloaded.Capabilities);
         Assert.Contains(AgentCapability.Testing, reloaded.Capabilities);
+
+        var mission = Mission.Create(Guid.NewGuid(), "Stale run", "Recover without replay", MissionMode.Real, Guid.NewGuid());
+        mission.SetStatus(MissionStatus.Running);
+        var task = AgentTask.Create(mission.Id, "Provider task", nameof(AgentCapability.Coding), 1);
+        task.Start();
+        var handoff = HandoffRecord.Create(mission.Id, task.Id, agent.Id, HandoffReason.ProviderFailure, Guid.NewGuid());
+        handoff.BeginTransfer();
+        db.Missions.Add(mission);
+        db.Tasks.Add(task);
+        db.Handoffs.Add(handoff);
+        await db.SaveChangesAsync();
+
+        var staleTimestamp = DateTime.UtcNow.AddHours(-1);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE \"Missions\" SET \"UpdatedAtUtc\" = {staleTimestamp} WHERE \"Id\" = {mission.Id}");
+
+        var events = new RecordingEventPublisher();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDbContext<NeuraDbContext>(options => options.UseNpgsql(_container.GetConnectionString()));
+        using var serviceProvider = services.BuildServiceProvider();
+        var recovery = new MissionRecoveryService(
+            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<MissionRecoveryService>.Instance,
+            events,
+            new MissionRecoveryOptions
+            {
+                HeartbeatIntervalSeconds = 1,
+                StaleRunningTimeoutSeconds = 3,
+                RecoverySweepIntervalSeconds = 1
+            });
+
+        Assert.Equal(1, await recovery.RecoverStaleRunningMissionsAsync(CancellationToken.None));
+        Assert.Equal(new[] { NeuralEventTypes.MissionFailed }, events.EventTypes);
+
+        var failedMission = await db.Missions.AsNoTracking().SingleAsync(m => m.Id == mission.Id);
+        var failedTask = await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == task.Id);
+        var failedHandoff = await db.Handoffs.AsNoTracking().SingleAsync(h => h.Id == handoff.Id);
+        Assert.Equal(MissionStatus.Failed, failedMission.Status);
+        Assert.Equal(TaskStatus2.Failed, failedTask.Status);
+        Assert.Equal(HandoffState.Failed, failedHandoff.State);
+    }
+
+    [Fact]
+    public async Task EmailOutbox_OnlyOneIndependentDispatcherCanSendAClaimedRow()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDataProtection().SetApplicationName("Neura.PostgresOutbox.IntegrationTests");
+        services.AddDbContext<NeuraDbContext>(options => options.UseNpgsql(_container.GetConnectionString()));
+        using var serviceProvider = services.BuildServiceProvider();
+        var protectionProvider = serviceProvider.GetRequiredService<IDataProtectionProvider>();
+
+        await using (var scope = serviceProvider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NeuraDbContext>();
+            await db.Database.MigrateAsync();
+            var sender = new EfEmailOutboxSender(db, protectionProvider);
+            await sender.SendAsync("outbox@example.test", "Confirmation", "one-time-confirmation-token");
+        }
+
+        var transport = new CountingEmailTransport();
+        var dispatcherOptions = Options.Create(new EmailOutboxOptions
+        {
+            LeaseDurationSeconds = 60,
+            MaxAttempts = 3
+        });
+        var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
+        var dispatcherOne = new EfEmailOutboxDispatcher(
+            scopeFactory,
+            transport,
+            protectionProvider,
+            dispatcherOptions,
+            NullLogger<EfEmailOutboxDispatcher>.Instance);
+        var dispatcherTwo = new EfEmailOutboxDispatcher(
+            scopeFactory,
+            transport,
+            protectionProvider,
+            dispatcherOptions,
+            NullLogger<EfEmailOutboxDispatcher>.Instance);
+
+        var dispatchResults = await Task.WhenAll(
+            dispatcherOne.DispatchNextAsync(CancellationToken.None),
+            dispatcherTwo.DispatchNextAsync(CancellationToken.None));
+
+        Assert.Equal(1, dispatchResults.Count(result => result));
+        Assert.Equal(1, transport.SendCount);
+        await using var verifyScope = serviceProvider.CreateAsyncScope();
+        var persisted = await verifyScope.ServiceProvider.GetRequiredService<NeuraDbContext>()
+            .EmailOutboxMessages.AsNoTracking().SingleAsync();
+        Assert.Equal(1, persisted.AttemptCount);
+        Assert.NotNull(persisted.SentAtUtc);
+        Assert.Null(persisted.ProtectedPayload);
+        Assert.Null(persisted.LeaseId);
+    }
+
+    private sealed class CountingEmailTransport : IEmailTransport
+    {
+        private int _sendCount;
+
+        public int SendCount => Volatile.Read(ref _sendCount);
+
+        public Task SendAsync(string toAddress, string subject, string body, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _sendCount);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingEventPublisher : INeuralEventPublisher
+    {
+        public List<string> EventTypes { get; } = new();
+
+        public Task PublishAsync(string eventType, object payload, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            EventTypes.Add(eventType);
+            return Task.CompletedTask;
+        }
     }
 }

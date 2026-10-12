@@ -1,29 +1,123 @@
-@model IEnumerable<Neura.Modules.Memory.Domain.MemoryRecord>
-@{ ViewData["Title"] = "Memory Center"; }
-<section class="panel" style="margin:1rem;">
-    <h1 class="panel__title">Memory Center</h1>
-    <form method="get" style="margin-bottom:1rem;">
-        <input name="q" value="@ViewBag.Query" placeholder="Search memory content…" class="btn" style="width:300px;" />
-        <button type="submit" class="btn btn--primary">Search</button>
-    </form>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead><tr class="text-dim"><th>Type</th><th>Content</th><th>Importance</th><th>Confidence</th><th>Created</th><th></th></tr></thead>
-        <tbody>
-        @foreach (var m in Model)
+@model Neura.Web.ViewModels.MemoryCenterViewModel
+@{
+    ViewData["Title"] = "Memory Center";
+    var canManage = User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User");
+}
+<section class="page-shell">
+    <div class="panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">CONTINUITY / PROJECT MEMORY</p>
+                <h1 class="panel__title">Memory Center</h1>
+            </div>
+            <span class="badge">@Model.Memories.Count ACTIVE</span>
+        </div>
+
+        @if (TempData["MemoryMessage"] is string message)
         {
-            <tr>
-                <td>@m.Type</td>
-                <td>@m.Content</td>
-                <td>@m.Importance</td>
-                <td>@m.Confidence</td>
-                <td>@m.CreatedAt.ToString("u")</td>
-                <td>
-                    <form method="post" asp-action="Delete" asp-route-id="@m.MemoryId">
-                        <button class="btn btn--icon" type="submit">Delete</button>
-                    </form>
-                </td>
-            </tr>
+            <p class="status-note" role="status">@message</p>
         }
-        </tbody>
-    </table>
+        <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+
+        @if (canManage)
+        {
+            @if (Model.Projects.Count > 0)
+            {
+                <details class="panel memory-create">
+                    <summary class="panel__title">＋ Add project memory</summary>
+                    <p class="text-dim">Only store information you want available to later tasks in this project. Retrieved memory is untrusted reference context, never system instructions.</p>
+                    <form method="post" asp-action="Create" class="form-grid">
+                        @Html.AntiForgeryToken()
+                        <label>Project
+                            <select name="projectId" required class="form-control">
+                                @foreach (var project in Model.Projects)
+                                {
+                                    <option value="@project.ProjectId">@project.Label (@project.ProjectId)</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Memory type
+                            <select name="type" class="form-control">
+                                <option value="LongTermProject">Long-term project fact</option>
+                                <option value="Semantic">Semantic fact</option>
+                                <option value="Episodic">Episode / decision</option>
+                                <option value="Working">Working context</option>
+                                <option value="ShortTerm">Short-term note</option>
+                            </select>
+                        </label>
+                        <label class="form-grid__wide">Memory content
+                            <textarea name="content" maxlength="4000" rows="4" required class="form-control" placeholder="A concise fact, decision, preference, or constraint. Do not include secrets."></textarea>
+                        </label>
+                        <label>Importance (0–1)
+                            <input name="importance" type="number" min="0" max="1" step="0.05" value="0.7" required class="form-control" />
+                        </label>
+                        <label>Confidence (0–1)
+                            <input name="confidence" type="number" min="0" max="1" step="0.05" value="0.8" required class="form-control" />
+                        </label>
+                        <label>Tags (comma separated)
+                            <input name="tags" maxlength="512" class="form-control" placeholder="architecture, constraint" />
+                        </label>
+                        <label>Retention (days, blank = no expiry)
+                            <input name="retentionDays" type="number" min="1" max="3650" class="form-control" />
+                        </label>
+                        <div class="form-grid__wide form-actions">
+                            <button type="submit" class="btn btn--primary">Save memory</button>
+                        </div>
+                    </form>
+                </details>
+            }
+            else
+            {
+                <p class="empty-state">Create a mission first; memory is scoped to projects that you can access.</p>
+            }
+        }
+
+        <form method="get" class="form-actions memory-search">
+            <label class="form-actions__grow">Search active memory
+                <input name="q" value="@Model.Query" maxlength="120" placeholder="Search memory content…" class="form-control" />
+            </label>
+            <button type="submit" class="btn btn--primary">Search</button>
+        </form>
+
+        @if (Model.Memories.Count == 0)
+        {
+            <p class="empty-state">No active memories matched. Expired records are excluded and cleaned up in the background.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>Type</th><th>Project scope</th><th>Content</th><th>Importance</th><th>Confidence</th><th>Tags</th><th>Created (UTC)</th><th>Updated (UTC)</th><th>Expires (UTC)</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var memory in Model.Memories)
+                    {
+                        <tr>
+                            <td>@memory.Type</td>
+                            <td><code>@memory.ProjectId</code></td>
+                            <td class="memory-content">@memory.Content</td>
+                            <td>@memory.Importance.ToString("F2")</td>
+                            <td>@memory.Confidence.ToString("F2")</td>
+                            <td>@string.Join(", ", memory.Tags)</td>
+                            <td>@memory.CreatedAt.ToString("u")</td>
+                            <td>@memory.UpdatedAt.ToString("u")</td>
+                            <td>@(memory.Expiration?.ToString("u") ?? "Never")</td>
+                            <td>
+                                @if (canManage)
+                                {
+                                    <div class="form-actions">
+                                        <a class="btn" asp-action="Edit" asp-route-id="@memory.MemoryId">Edit</a>
+                                        <form method="post" asp-action="Delete" asp-route-id="@memory.MemoryId">
+                                            @Html.AntiForgeryToken()
+                                            <button class="btn btn--icon" type="submit" aria-label="Delete memory">Delete</button>
+                                        </form>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </section>

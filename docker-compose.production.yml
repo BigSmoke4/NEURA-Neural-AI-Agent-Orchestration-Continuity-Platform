@@ -1,0 +1,96 @@
+# Single-host production example. Build and push immutable images separately;
+# this file intentionally has no build: stanza and exposes PostgreSQL nowhere.
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE to a pinned PostgreSQL image digest}
+    restart: unless-stopped
+    stop_grace_period: 1m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-neura}
+      POSTGRES_USER: ${POSTGRES_USER:-neura}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - neura-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  web:
+    image: ${NEURA_IMAGE:?Set NEURA_IMAGE to an immutable NEURA image reference}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      AllowedHosts: ${NEURA_ALLOWED_HOSTS:?Set NEURA_ALLOWED_HOSTS to exact hostnames}
+      Neura__PublicOrigin: ${NEURA_PUBLIC_ORIGIN:?Set the canonical HTTPS application origin}
+      Neura__Smtp__Host: ${SMTP_HOST:?Set the SMTP relay hostname}
+      Neura__Smtp__Port: ${SMTP_PORT:-587}
+      Neura__Smtp__Username: ${SMTP_USERNAME:-}
+      Neura__Smtp__PasswordFile: /run/secrets/smtp_password
+      Neura__Smtp__FromAddress: ${SMTP_FROM_ADDRESS:?Set a verified sender address}
+      Neura__Smtp__EnableSsl: "true"
+      Neura__EmailOutbox__PollIntervalSeconds: ${EMAIL_OUTBOX_POLL_INTERVAL_SECONDS:-5}
+      Neura__EmailOutbox__LeaseDurationSeconds: ${EMAIL_OUTBOX_LEASE_DURATION_SECONDS:-300}
+      Neura__EmailOutbox__MaxAttempts: ${EMAIL_OUTBOX_MAX_ATTEMPTS:-12}
+      Neura__EmailOutbox__InitialRetryDelaySeconds: ${EMAIL_OUTBOX_INITIAL_RETRY_DELAY_SECONDS:-5}
+      Neura__EmailOutbox__MaximumRetryDelaySeconds: ${EMAIL_OUTBOX_MAX_RETRY_DELAY_SECONDS:-3600}
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-neura};Username=${POSTGRES_USER:-neura};Include Error Detail=false"
+      Neura__Database__PasswordFile: /run/secrets/postgres_password
+      Neura__DataProtectionKeyPath: /app/dp-keys
+      Neura__DataProtection__CertificatePath: /run/secrets/neura-dp.pfx
+      Neura__DataProtection__CertificatePasswordFile: /run/secrets/neura-dp-password
+      Neura__ForwardedHeaders__KnownProxies__0: ${NEURA_TRUSTED_PROXY_IP:?Set the exact reverse-proxy source IP}
+      Neura__Security__CookieSecurePolicy: Always
+    secrets:
+      - source: postgres_password
+        target: postgres_password
+      - source: neura_dp_certificate
+        target: neura-dp.pfx
+      - source: neura_dp_certificate_password
+        target: neura-dp-password
+      - smtp_password
+    volumes:
+      - neura-dp-keys:/app/dp-keys
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE to a protected secret file}
+  neura_dp_certificate:
+    file: ${NEURA_DP_CERTIFICATE_FILE:?Set NEURA_DP_CERTIFICATE_FILE to the PFX file}
+  neura_dp_certificate_password:
+    file: ${NEURA_DP_CERTIFICATE_PASSWORD_FILE:?Set NEURA_DP_CERTIFICATE_PASSWORD_FILE to a secret file}
+  smtp_password:
+    file: ${SMTP_PASSWORD_FILE:?Set SMTP_PASSWORD_FILE to a secret file}
+
+volumes:
+  neura-postgres-data:
+  neura-dp-keys:

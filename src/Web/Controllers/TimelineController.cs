@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
+using Neura.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Neura.Web.Controllers;
@@ -18,7 +19,7 @@ public class TimelineController : Controller
 
     public async Task<IActionResult> Index(Guid? missionId, CancellationToken ct)
     {
-        var query = _db.ExecutionEvents.AsQueryable();
+        var query = ResourceScope.ExecutionEvents(_db.ExecutionEvents, _db, User);
         if (missionId.HasValue)
             query = query.Where(e => e.MissionId == missionId.Value);
 

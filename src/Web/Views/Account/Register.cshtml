@@ -1,7 +1,7 @@
 @{ ViewData["Title"] = "Register"; var roles = (string[])(ViewBag.RegistrationRoles ?? new[] { "User", "Operator", "Auditor", "Admin" }); }
 <section class="panel" style="max-width:520px; margin:3rem auto;">
     <h1 class="panel__title">Create your NEURA account</h1>
-    <p class="panel__hint">Choose your role. User accounts work immediately; Operator, Auditor, and Admin registration require a server-configured registration code.</p>
+    <p class="panel__hint">Choose your role. Operator, Auditor, and Admin registration require a server-configured role code. Deployed environments require email confirmation before sign-in.</p>
     @if (!ViewData.ModelState.IsValid)
     {
         <div style="color:var(--color-critical); margin-bottom:1rem;">
@@ -26,11 +26,6 @@
         <button type="submit" class="btn btn--primary" style="width:100%;">Create account</button>
     </form>
 </section>
-<script>
-(() => {
-  const role = document.getElementById('registration-role');
-  const code = document.getElementById('role-code-wrap');
-  const update = () => code.style.display = role.value === 'User' ? 'none' : 'block';
-  role.addEventListener('change', update); update();
-})();
-</script>
+@section Scripts {
+    <script src="~/js/account/register.js" asp-append-version="true"></script>
+}

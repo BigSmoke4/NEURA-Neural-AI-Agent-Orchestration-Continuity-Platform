@@ -1,30 +1,104 @@
 @model IEnumerable<Neura.Modules.AgentManagement.Domain.Agent>
-@{ ViewData["Title"] = "Agent Network"; }
-<section class="panel" style="margin:1rem;">
-    <h1 class="panel__title">Agent Network</h1>
-    <table style="width:100%; border-collapse:collapse;">
-        <thead><tr class="text-dim"><th>Name</th><th>Role</th><th>Status</th><th>Capabilities</th><th>Reliability</th><th>Enabled</th><th></th></tr></thead>
-        <tbody>
-        @foreach (var a in Model)
+@{
+    ViewData["Title"] = "Agent Network";
+    var providers = ViewBag.Providers as IEnumerable<Neura.Modules.ProviderIntegration.Domain.AIProviderAccount>
+        ?? Array.Empty<Neura.Modules.ProviderIntegration.Domain.AIProviderAccount>();
+}
+<section class="page-shell">
+    <div class="panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">NEURAL NETWORK / REGISTRY</p>
+                <h1 class="panel__title">Agent Network</h1>
+            </div>
+            <span class="badge">@Model.Count() AGENTS</span>
+        </div>
+
+        @if (TempData["AgentError"] is string agentError)
         {
-            <tr>
-                <td><a asp-action="Details" asp-route-id="@a.Id">@a.Name</a></td>
-                <td>@a.Role</td>
-                <td>@a.Status</td>
-                <td>@string.Join(", ", a.Capabilities)</td>
-                <td>@a.ReliabilityScore.ToString("P0")</td>
-                <td>@(a.Enabled ? "Yes" : "No")</td>
-                <td>
-                    <form method="post" asp-action="Disable" asp-route-id="@a.Id">
-                        <button class="btn btn--icon" type="submit">Disable</button>
-                    </form>
-                </td>
-            </tr>
+            <p class="validation-summary" role="alert">@agentError</p>
         }
-        </tbody>
-    </table>
-    @if (!Model.Any())
-    {
-        <p class="text-dim">No agents yet. Agents created via the Simulation Demo or MissionWorker are in-memory only — add a Create form here bound to AgentsController.Create to persist real ones.</p>
-    }
+
+        @if (providers.Any())
+        {
+            <details class="instrument-details">
+                <summary class="btn btn--primary">＋ Register an agent</summary>
+                <form method="post" asp-action="Create" class="form-grid form-grid--agent">
+                    @Html.AntiForgeryToken()
+                    <label>Name <input name="name" maxlength="120" required class="form-control" /></label>
+                    <label>Provider account
+                        <select name="providerAccountId" required class="form-control">
+                            @foreach (var provider in providers)
+                            {
+                                <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Model ID <input name="modelId" maxlength="200" required class="form-control" placeholder="Use the exact model ID enabled for this account" /></label>
+                    <label>Specialization / role <input name="role" maxlength="120" required class="form-control" placeholder="Coding Agent" /></label>
+                    <label>Context capacity (tokens) <input name="contextCapacityTokens" type="number" min="1000" max="10000000" value="128000" required class="form-control" /></label>
+                    <label class="form-grid__wide">Description <textarea name="description" maxlength="2000" rows="2" class="form-control"></textarea></label>
+                    <fieldset class="capability-picker form-grid__wide">
+                        <legend>Capabilities</legend>
+                        @foreach (var capability in Enum.GetValues<Neura.Modules.AgentManagement.Domain.AgentCapability>())
+                        {
+                            <label class="check-option">
+                                <input type="checkbox" name="capabilities" value="@capability" checked="@(capability == Neura.Modules.AgentManagement.Domain.AgentCapability.Coding ? "checked" : null)" />
+                                @capability
+                            </label>
+                        }
+                    </fieldset>
+                    <div class="form-grid__wide form-actions">
+                        <button type="submit" class="btn btn--primary">Save agent</button>
+                    </div>
+                </form>
+            </details>
+        }
+        else
+        {
+            <p class="empty-state">Connect an official AI provider first. Agents are separate from providers: choose a provider here, then assign its exact model ID and capabilities.</p>
+            <a class="btn" asp-controller="Providers" asp-action="Index">Open provider management</a>
+        }
+
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Name</th><th>Role</th><th>Status</th><th>Capabilities</th><th>Reliability</th><th>Enabled</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var agent in Model)
+                {
+                    <tr>
+                        <td><a asp-action="Details" asp-route-id="@agent.Id">@agent.Name</a></td>
+                        <td>@agent.Role</td>
+                        <td><span class="status-pill status-pill--@agent.Status.ToString().ToLowerInvariant()">@agent.Status</span></td>
+                        <td>@string.Join(", ", agent.Capabilities)</td>
+                        <td>@agent.ReliabilityScore.ToString("P0")</td>
+                        <td>@(agent.Enabled ? "Yes" : "No")</td>
+                        <td>
+                            @if (agent.Enabled)
+                            {
+                                <form method="post" asp-action="Disable" asp-route-id="@agent.Id">
+                                    @Html.AntiForgeryToken()
+                                    <button class="btn btn--icon" type="submit">Disable</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-action="Enable" asp-route-id="@agent.Id">
+                                    @Html.AntiForgeryToken()
+                                    <button class="btn btn--icon" type="submit">Enable</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (!Model.Any())
+        {
+            <p class="empty-state">No agent configurations yet.</p>
+        }
+    </div>
 </section>

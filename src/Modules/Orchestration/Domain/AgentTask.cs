@@ -48,4 +48,13 @@ public class AgentTask : Entity
     public void Start() { Status = TaskStatus2.Running; Touch(); }
     public void Complete() { Status = TaskStatus2.Completed; Touch(); }
     public void Fail() { Status = TaskStatus2.Failed; Touch(); }
+
+    public void Cancel()
+    {
+        if (Status is TaskStatus2.Completed or TaskStatus2.Failed or TaskStatus2.Cancelled)
+            return;
+
+        Status = TaskStatus2.Cancelled;
+        Touch();
+    }
 }

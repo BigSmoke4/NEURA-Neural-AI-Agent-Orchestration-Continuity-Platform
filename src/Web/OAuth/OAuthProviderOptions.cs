@@ -12,6 +12,9 @@ namespace Neura.Web.OAuth;
 /// </summary>
 public sealed class OAuthProviderOptions
 {
+    // Disabled by default: OAuth tokens need provider-specific refresh and
+    // execution semantics before they can be treated as durable API credentials.
+    public bool Enabled { get; set; }
     public string? AuthorizationEndpoint { get; set; }
     public string? TokenEndpoint { get; set; }
     public string? ClientId { get; set; }

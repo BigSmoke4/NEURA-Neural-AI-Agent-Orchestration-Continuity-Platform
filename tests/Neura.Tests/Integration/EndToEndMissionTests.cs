@@ -10,16 +10,13 @@ using Xunit;
 namespace Neura.Tests.Integration;
 
 /// <summary>
-/// A full-stack, non-browser end-to-end test: registers a real user
-/// through the actual Identity flow (picking up the antiforgery token
-/// from the rendered HTML the way a browser would), creates a mission
-/// through MissionsController, starts it, and polls the real database
-/// until the background MissionWorker has driven it to completion via
-/// the Simulation provider — then asserts ExecutionEvent and CostRecord
-/// rows were actually written. This exercises the complete path the UI
-/// drives (HTTP → auth → controller → EF → queue → background worker →
-/// orchestration engine → persistence) without a browser automating the
-/// DOM, which is the one piece still missing per the README.
+/// A non-browser end-to-end test: registers a user through the real
+/// Identity HTTP flow, creates and starts a Simulation mission, then polls
+/// the test database (EF Core InMemory) until the hosted MissionWorker
+/// persists a TaskCompleted event. This exercises the request, auth,
+/// controller, worker, orchestration, event persistence, and server-rendered
+/// mission-result view. It does not prove relational PostgreSQL behavior,
+/// browser interaction, or real provider execution.
 /// </summary>
 public class EndToEndMissionTests : IClassFixture<NeuraWebApplicationFactory>
 {
@@ -129,5 +126,13 @@ public class EndToEndMissionTests : IClassFixture<NeuraWebApplicationFactory>
         }
 
         Assert.True(completed);
+
+        // Verify the persisted TaskCompleted payload is actually surfaced by
+        // the server-rendered Razor details view, not only held in ViewBag.
+        var renderedDetails = await client.GetAsync($"/Missions/Details/{mission.Id}");
+        Assert.Equal(HttpStatusCode.OK, renderedDetails.StatusCode);
+        var renderedHtml = await renderedDetails.Content.ReadAsStringAsync();
+        Assert.Contains("Mission result", renderedHtml);
+        Assert.Contains("[SIMULATION:", renderedHtml);
     }
 }

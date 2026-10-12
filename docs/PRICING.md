@@ -1,37 +1,45 @@
-# Model Pricing
+# Model pricing and cost records
 
-`Neura:ModelPricing` in configuration drives `ModelPricingOptions`,
-consumed by `CostCalculator` via each provider adapter. The defaults
-compiled into the adapters (used only when a model isn't listed in
-config) reflect roughly representative per-1k-token rates for
-mid-tier models from Anthropic, OpenAI, and Google **as published
-around early-to-mid 2025** — sourced from general knowledge at the time
-this project was built, not fetched live. AI vendor pricing changes
-frequently and varies by exact model tier (e.g. Opus vs Sonnet vs
-Haiku-class models differ by 5-10x), so:
+NEURA records **estimated cost**, not a vendor invoice. A provider adapter
+normalizes actual input/output token counts from a successful real API
+response; `CostCalculator` multiplies those counts by the per-1,000-token
+rates configured for the selected model. Simulation activity does not create
+billable cost records.
 
-1. **Before trusting Cost Center numbers for anything real**, look up
-   the current published pricing page for each vendor/model you've
-   actually connected, and set it explicitly under
-   `Neura:ModelPricing:Models:{exact-model-id}` in configuration —
-   config always overrides the adapter's built-in fallback.
-2. Treat the built-in fallback values purely as "something reasonable
-   renders in the UI during development," never as a billing source of
-   truth.
-3. If you need pricing for a model not listed here, add it to config —
-   no code change or redeploy required, since `ProviderFactory` reads
-   `ModelPricingOptions` at request time.
+## Configure rates
 
-Example:
+Set exact provider model IDs in `Neura:ModelPricing:Models` using app
+configuration, environment variables, or a secret/configuration manager.
+Rates below are dollars per 1,000 tokens.
+
+Example schema (replace the model ID and both values with rates you have
+verified directly with the provider; **the example numbers are illustrative,
+not current vendor pricing**):
 
 ```json
-"Neura": {
-  "ModelPricing": {
-    "Models": {
-      "claude-opus-5": { "InputPer1k": 0.015, "OutputPer1k": 0.075 },
-      "claude-sonnet-5": { "InputPer1k": 0.003, "OutputPer1k": 0.015 },
-      "gpt-5": { "InputPer1k": 0.005, "OutputPer1k": 0.015 }
+{
+  "Neura": {
+    "ModelPricing": {
+      "Models": {
+        "replace-with-exact-model-id": {
+          "InputPer1k": 0.001,
+          "OutputPer1k": 0.002
+        }
+      }
     }
   }
 }
 ```
+
+The application binds pricing at startup, so restart the web process after
+changing these values. A model without an explicit override uses the
+adapter's built-in representative fallback rate (currently provider-wide,
+not model-specific). Those fallback rates may be inaccurate for the selected
+model, tier, cached input, batch discounts, or other billing adjustments.
+Do not use them for budgeting, invoicing, or billing reconciliation.
+
+Provider APIs can change both prices and token accounting. Check the
+provider's current published pricing and actual account usage before
+relying on an estimate. A future improvement is to attach rate provenance,
+pricing version, cache/batch token categories, and reconciliation status to
+each cost record; those are not currently stored.

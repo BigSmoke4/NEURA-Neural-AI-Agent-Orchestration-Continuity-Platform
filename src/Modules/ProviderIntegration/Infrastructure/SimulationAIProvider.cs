@@ -13,11 +13,13 @@ public sealed class SimulationAIProvider : IAIProvider
     private int _step;
     private readonly string _personaName;
     private readonly int _contextWindow;
+    private readonly bool _completesTask;
 
-    public SimulationAIProvider(string personaName, int contextWindow = 100)
+    public SimulationAIProvider(string personaName, int contextWindow = 100, bool completesTask = false)
     {
         _personaName = personaName;
         _contextWindow = contextWindow;
+        _completesTask = completesTask;
     }
 
     public ProviderKind Kind => ProviderKind.Simulation;
@@ -42,7 +44,8 @@ public sealed class SimulationAIProvider : IAIProvider
             Latency: TimeSpan.FromMilliseconds(180 + Random.Shared.Next(0, 400)),
             EstimatedCost: 0m,
             IsSuccess: true,
-            ErrorMessage: null);
+            ErrorMessage: null,
+            IsTaskComplete: _completesTask);
 
         return Task.FromResult(response);
     }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.ContextManagement.Domain;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
@@ -23,7 +24,10 @@ public class ContextController : Controller
 
     public async Task<IActionResult> Index(CancellationToken ct)
     {
-        var packages = await _db.ContextPackages.OrderByDescending(p => p.CreatedAtUtc).Take(50).ToListAsync(ct);
+        var packages = await ResourceScope.ContextPackages(_db.ContextPackages, _db, User)
+            .OrderByDescending(p => p.CreatedAtUtc)
+            .Take(50)
+            .ToListAsync(ct);
 
         var elements = new List<object>();
         foreach (var p in packages)
@@ -45,7 +49,8 @@ public class ContextController : Controller
 
     public async Task<IActionResult> Details(Guid id, CancellationToken ct)
     {
-        var package = await _db.ContextPackages.FirstOrDefaultAsync(p => p.Id == id, ct);
+        var package = await ResourceScope.ContextPackages(_db.ContextPackages, _db, User)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
         if (package is null) return NotFound();
 
         ViewBag.ElementsJson = JsonSerializer.Serialize(BuildPackageGraph(package));

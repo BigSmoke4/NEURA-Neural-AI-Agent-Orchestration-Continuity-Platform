@@ -2,39 +2,44 @@
 
 NEURA is a modular-monolith ASP.NET Core MVC platform that orchestrates
 multiple AI agents/providers on a shared mission, monitors their context
-usage, and automatically hands off in-progress work from one agent to
-another when context runs out — all shown live on a neural-graph "brain"
-dashboard.
+usage, and hands off in-progress work to one eligible fallback when the
+configured context-exhaustion threshold is reached — all shown live on a
+neural-graph "brain" dashboard.
 
 ## Status
 
-This build focuses on two things: (1) implementing the core orchestration
-architecture faithfully, and (2) hardening the parts of it that matter
-for running in production — auth, credential handling, rate limiting,
-error handling, security headers, real cost tracking, input validation,
-and container/CI deployment. It does **not** implement every one of the
-97 sections in the original specification; the remaining gaps are listed
-under **Future Work** below rather than glossed over.
+The repository contains a substantial working foundation, but it is not
+an implementation of every one of the 97 specification sections and should
+not be represented as production-ready yet. This pass corrected several
+end-to-end gaps: real provider output is now validated and surfaced instead
+of fabricated completion, handoffs are persisted, queued missions survive
+process restarts, provider/agent ownership is enforced, event delivery is
+tenant-scoped, and URL ingestion is hardened against SSRF.
 
-I have not been able to run `dotnet build` against this anywhere — there
-is no .NET SDK available in the environment that produced it — so treat
-first compilation as an expected step, not a guarantee.
+The current environment does not have the .NET SDK or Docker daemon, so I
+could not run `dotnet build`, the xUnit suite, PostgreSQL integration tests,
+or the Playwright job here. Run the CI workflow before merging or deploying.
 
-## Production-hardening included
+## Security and operational foundations
 
 - **Encrypted credentials at rest.** Provider API keys are encrypted via
   ASP.NET Core Data Protection (`ICredentialProtector`) before being
   persisted, and decrypted only at the point of use. Raw keys are never
-  logged or rendered back to any screen (masked as `••••1234`).
-- **Rate limiting** on login, mission creation, and provider
-  configuration, plus a global per-IP limiter, via .NET 8's built-in
-  `Microsoft.AspNetCore.RateLimiting`.
+  logged or rendered back to any screen; there is no masked-key display.
+- **Per-IP rate limiting** on login/registration, account recovery, mission
+  creation, and provider configuration, plus a global IP limit. Without Redis,
+  ASP.NET Core enforces windows per process; setting
+  `Neura:Redis:ConnectionString` switches both global and named windows to
+  atomic shared Redis counters.
 - **Global exception handling middleware** — logs full detail
   server-side with a correlation ID, returns only a generic message to
   the client.
 - **Security headers middleware** — `X-Frame-Options`,
-  `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` (CSP
-  scaffolded, commented pending CDN allow-listing).
+  `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, and an
+  enforced same-origin script CSP. Cytoscape and SignalR are pinned and
+  self-hosted; inline scripts/event handlers and inline style blocks are
+  blocked. Inline style attributes remain temporarily allowed for legacy
+  Razor styles and graph rendering.
 - **CSRF protection** applied globally to all MVC actions, with
   antiforgery tokens rendered on every mutating form.
 - **Hardened Identity configuration** — strong password policy, account
@@ -42,25 +47,24 @@ first compilation as an expected step, not a guarantee.
 - **Server-side input validation** via FluentValidation on mission,
   agent, and provider-connection input — rejecting bad input before it
   reaches the domain layer, not just relying on client-side checks.
-- **Real cost calculation** — `CostCalculator` computes actual estimated
-  cost from token usage × published per-model pricing, persisted as
-  `CostRecord` rows on every AI request the orchestration engine makes,
-  feeding the Cost Center screen with real numbers instead of `0m`
-  placeholders.
+- **Real cost calculation** — `CostCalculator` estimates per-model cost
+  from normalized token usage and configured pricing; successful real-mode
+  provider responses are persisted as `CostRecord` rows. Simulation is
+  excluded from billable cost records.
 - **Retry + circuit breaker** (`ResilientProviderDecorator`) wraps every
   real-mode provider adapter with exponential backoff and a
   failure-triggered circuit breaker, preventing infinite retry loops
   against a failing provider.
-- **Persisted execution/audit trail** — every orchestration event is
-  written to `ExecutionEvent` (mission replay) and every sensitive
-  action to `AuditLogEntry` (who/what/when/result), not just broadcast
-  live and discarded.
-- **Docker + docker-compose** for a one-command local/production-like
-  run (Postgres + the app, with a persisted Data Protection key volume),
-  and a **GitHub Actions CI workflow** that restores/builds/tests on
-  every push.
+- **Persisted execution/audit trail** — orchestration events are written
+  to `ExecutionEvent` for mission replay when the event projection succeeds;
+  persistence and SignalR broadcast are not atomic, and write failures are
+  logged. Sensitive UI actions use `AuditLogEntry` (who/what/when/result).
+- **Docker Compose** for a one-command local run (PostgreSQL + the app,
+  with persisted database and Data Protection key volumes), and a **GitHub
+  Actions CI workflow** on pushes to `main` and pull requests targeting
+  `main`.
 
-## Core architecture (unchanged from earlier passes, still real)
+## Core architecture foundation
 
 - Modular monolith matching the spec's module map: AgentManagement,
   ProviderIntegration, Orchestration, ContextManagement, Handoff,
@@ -75,23 +79,27 @@ first compilation as an expected step, not a guarantee.
   candidate agent rather than a black-box choice.
 - Real provider adapters for **Anthropic, OpenAI, and Google** calling
   each vendor's official API (never scraping, never storing passwords),
-  plus an explicitly-labeled `SimulationAIProvider` for demos — anything
-  requiring a real connection that hasn't been made surfaces as **NOT
-  CONFIGURED** rather than fabricating a response.
-- `MissionWorker` (a `BackgroundService`) drains an in-memory mission
-  queue so `MissionsController.Create` returns immediately instead of
-  blocking on orchestration.
+  plus an explicitly-labeled `SimulationAIProvider` for demos — a Real
+  mission without a matching connected account and enabled agent fails
+  clearly rather than falling back to simulated output.
+- `MissionWorker` (a `BackgroundService`) polls persisted `Queued`
+  missions, uses a conditional database claim to prevent duplicate work
+  across instances, and runs orchestration outside the HTTP request.
 - A live SignalR-driven **Brain Dashboard** with a Cytoscape.js neural
   graph, plus a deterministic **Simulation Mode** demo reproducing the
   spec's reference scenario (Claude ramps to 96% context usage →
   exhaustion → handoff → ChatGPT continues).
-- All **16 named screens** exist and render real EF-backed data (depth
-  varies — see Future Work for which are full experiences vs. plain
-  table views): Login/Register, Brain, Missions, Agents, Providers,
+- MVC views cover account access, Brain, Missions, Agents, Providers,
   Handoffs, Context Explorer, Memory, Knowledge Graph, Timeline,
-  Observability, Cost, Security, Settings.
-- `tests/Neura.Tests` — xUnit unit tests for context-threshold
-  evaluation, handoff validation, and agent routing/scoring.
+  Observability, Cost, Security, Settings, Notifications, Users, and the
+  manual Sandbox. Most operational records come from EF-backed data;
+  depth and workflow coverage vary, as detailed in the subsystem docs.
+- `tests/Neura.Tests` — xUnit unit and ASP.NET integration tests cover
+  routing, context thresholds, trust labels, handoff validation/persistence,
+  authenticated and owner-scoped SignalR delivery, resource-scope queries,
+  HTTP health, and a deterministic worker-driven mission flow. A separate Testcontainers test exercises
+  PostgreSQL when Docker is available. These tests have not been run in
+  this workspace.
 
 ## Requirements
 
@@ -101,35 +109,33 @@ first compilation as an expected step, not a guarantee.
 ## Getting started (Docker)
 
 ```bash
-cp .env.example .env   # set POSTGRES_PASSWORD
+cp .env.example .env
+mkdir -p secrets
+openssl rand -base64 32 > secrets/postgres_password
+chmod 644 secrets/postgres_password # local dev only; readable by the non-root container UID
 docker compose up --build
 ```
 
 ## Getting started (manual)
 
 ```bash
-git clone <this repo>
-cd NEURA
-
 cp src/Web/appsettings.example.json src/Web/appsettings.Development.json
-# edit the connection string
-
-cd src/Web
-dotnet user-secrets init
-dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=neura;Username=neura;Password=..."
-
-dotnet ef migrations add InitialCreate --project ../Infrastructure --startup-project .
-dotnet ef database update --project ../Infrastructure --startup-project .
-
-dotnet run
+dotnet user-secrets init --project src/Web/Web.csproj
+dotnet user-secrets set \
+  "ConnectionStrings:Default" \
+  "Host=localhost;Port=5432;Database=neura;Username=neura;Password=..." \
+  --project src/Web/Web.csproj
+dotnet run --project src/Web/Web.csproj
 ```
 
-Then open the app and click **Run Simulation Demo** on the Brain screen
-— no database write or provider credentials are required to see the
-full handoff flow, since it runs entirely against the in-memory
-`SimulationAIProvider`. To exercise Real Mode, register/sign in, then
-connect a provider (e.g. Anthropic) with a real API key on the
-Providers screen — the key is encrypted before it's stored.
+A fresh local database is provisioned from the current EF model at startup.
+**There is no checked-in migration baseline**, so this does not upgrade an
+existing schema; use a disposable dev database and create/review migrations
+before production data is retained. The Brain's Simulation Demo persists a
+mission, output, execution events, context package, and handoff while clearly
+labeling all simulator activity. To use Real Mode, sign in, connect your own
+official provider API key, create an agent with a real model ID and matching
+capability, then create and queue a Real mission.
 
 ## Project layout
 
@@ -144,7 +150,7 @@ NEURA/
 │   │   │                        OpenAI/Google adapters, resilience decorator,
 │   │   │                        cost calculator
 │   │   ├── Orchestration/       Mission/Task domain, OrchestrationEngine,
-│   │   │                        routing, mission queue, neural events, ICostSink
+│   │   │                        routing, continuity, neural event contracts
 │   │   ├── ContextManagement/   Context handoff package, threshold evaluation
 │   │   ├── Handoff/             Handoff record, validation
 │   │   ├── Memory/              Memory record domain (5 memory types)
@@ -159,149 +165,110 @@ NEURA/
 └── .github/workflows/ci.yml
 ```
 
-See `docs/ARCHITECTURE.md`, `docs/HANDOFF_PROTOCOL.md`,
-`docs/DATABASE.md`, `docs/SECURITY.md`, and `docs/DEPLOYMENT.md` for
-deeper detail on each subsystem.
+See `docs/ARCHITECTURE.md`, `docs/ORCHESTRATION.md`,
+`docs/AI_PROVIDER_INTEGRATION.md`, `docs/HANDOFF_PROTOCOL.md`,
+`docs/MEMORY_ARCHITECTURE.md`, `docs/KNOWLEDGE_GRAPH.md`,
+`docs/DATABASE.md`, `docs/SECURITY.md`, `docs/OBSERVABILITY.md`,
+`docs/PRICING.md`, `docs/DEVELOPMENT.md`, and `docs/DEPLOYMENT.md` for
+subsystem details, operational steps, and explicit limitations.
 
-## Production-hardening added in this pass
+## Security and persistence updates
 
-- **Authorization attached to every controller** —
-  `[Authorize(Policy = "...")]` matching the policies declared in
-  `Program.cs`, plus role seeding (Admin/Operator/User/Auditor) at
-  startup and new registrants auto-assigned "User".
-- **`ContextHandoffPackage` persisted as its own table**
-  (`ContextPackages`, via `IContextPackageSink`) — the Context Explorer
-  screen now shows full field-level detail per package instead of a
-  `HandoffRecord` proxy.
-- **Notification system** — a real `Notification` domain entity, a
-  Notifications screen, and `OrchestrationEngine` firing notifications
-  on context warnings, handoffs, and task completion.
-- **Real container sandbox** — `DockerContainerSandbox` runs
-  network-disabled, resource-capped ephemeral containers; registered in
-  DI but never invoked automatically by anything in this codebase.
-- **Generic OAuth2 authorization-code flow** (`ProviderOAuthController`)
-  as an alternative to pasting an API key, with CSRF-protected state and
-  config-driven endpoints per provider kind.
-- **Config-toggled distributed infrastructure** — Redis SignalR
-  backplane and OTLP trace export, both off by default, both one config
-  key away from on.
-- **Configurable model pricing** (`Neura:ModelPricing`) instead of
-  hardcoded per-adapter literals.
-- **Prompt-injection trust labeling** — `ContentTrustLevel` /
-  `TrustLabeledContent` / `AgentTask.AttachReferenceMaterial`, with
-  `OrchestrationEngine` building outgoing AI messages so untrusted
-  content is explicitly delimited and labeled non-authoritative rather
-  than merged into the instruction stream.
-- **Interactive Knowledge Graph** — Cytoscape.js rendering fed by real
-  `KnowledgeNodes`/`KnowledgeEdges` data, with a screen-reader-friendly
-  text alternative on node selection.
-- **Integration tests** via `WebApplicationFactory` (real ASP.NET Core
-  pipeline, EF Core InMemory provider) asserting actual
-  authorization-middleware behavior and a live health check.
+- Controllers enforce server-side authorization policies. New users receive
+  only the `User` role; privileged registration codes have no shipped
+  default. Auditors have read-only cross-user access and cannot queue/run
+  missions, delete memory, or mutate notifications. Provider keys and agent
+  records are owner-scoped; operational access is policy-scoped.
+- Staging/Production startup fails closed unless host filtering is explicit,
+  the Data Protection key path and RSA private-key certificate are configured
+  with absolute paths, and the database has a complete applied EF migration
+  history. `docker-compose.yml` runs in Development; a separate
+  `docker-compose.production.yml` example is documented but does not bypass
+  migration, image, secret, backup, and environment-level release gates.
+- The authenticated SignalR hub routes mission activity to a per-user group;
+  Admin/Auditor users join a separate operations group. Event text is
+  inserted into the dashboard with `textContent`, not `innerHTML`.
+- Handoffs persist both `ContextHandoffPackage` and each lifecycle state via
+  `IHandoffSink`. Provider results are checked before a task can be marked
+  complete; raw upstream error bodies are not sent to the browser.
+- The hosted worker claims persisted `Queued` missions with a conditional
+  database update. The in-memory channel has been removed.
+- URL reference ingestion is limited to public HTTP/HTTPS destinations,
+  standard ports, no redirects, capped response size/time, and a
+  connection-time public-IP check to resist SSRF.
+- **OAuth is intentionally disabled by default.** A generic callback alone
+  is not sufficient to handle provider-specific scopes, bearer-vs-API-key
+  auth, and refresh-token rotation. Use official API keys until those
+  lifecycles are implemented.
+- Docker, Redis SignalR backplane/session cache, OpenTelemetry OTLP export,
+  SMTP, and the manual sandbox are deployment-configured features. SMTP is
+  required in Staging/Production for verified-account sign-in and recovery;
+  the other integrations remain optional. The sandbox is never called
+  automatically by model output.
 
-## Gaps closed in this pass
+## Known gaps — this is not a production release yet
 
-Every item the previous README listed under Future Work has been
-addressed for real — most fully closed, two closed as far as they
-honestly can be without fabricating something that doesn't exist:
+- The generated `InitialBaseline` EF migration and model snapshot are checked
+  in. CI verifies snapshot parity and applies it to a fresh PostgreSQL
+  Testcontainer. Development/Testing still use `EnsureCreated` only for
+  disposable databases; retained schemas created that way require a separately
+  reviewed adoption plan, and production backup/upgrade/rollback rehearsal
+  remains necessary.
+- Mission creation persists one starter task. Full AI mission decomposition,
+  task DAG scheduling/parallelism, semantic memory search/decay, automatic
+  knowledge-graph ingestion, and reviewed model-output fact extraction are
+  not implemented. The project Memory Center supports scoped create/revise/
+  search/delete, bounded lexical retrieval, explicit untrusted labeling,
+  retention, and background cleanup.
+- Active missions heartbeat their persisted `UpdatedAtUtc`. Stale runs are
+  marked `Failed` after the configurable timeout and are never auto-requeued,
+  because a provider-side effect may already have occurred. This prevents
+  permanently stuck `Running` rows, but checkpointed resume, operator retry
+  UI, and exactly-once provider effects are not implemented.
+- Routing is deterministic and explainable, but provider health is currently
+  inferred from a connected account rather than active health probes.
+- Provider/event metrics can export through OTLP, but dashboards, retention,
+  and several domain metrics are incomplete. The CSP's temporary inline-style
+  allowance remains. Durable email is encrypted and retried through a
+  PostgreSQL outbox; delivery is at-least-once, with dead-letter admin/replay
+  and sent-row retention tooling still absent. Redis-backed quotas are verified
+  across independent clients and fail closed during outage; deployment-specific
+  Sentinel/Cluster failover, ACL/TLS, and network policy still need smoke tests.
+- GitHub Actions verifies the .NET build, unit/integration tests, PostgreSQL
+  migrations, Redis outage/recovery gates, and browser E2E. This sandbox has no
+  local .NET SDK or Docker daemon; production backup/restore and deployment
+  topology smoke tests remain release tasks.
 
-- **OAuth now has a real, working default.** `Neura:OAuth:Google` in
-  `appsettings.example.json` points at Google's actual public OAuth2
-  endpoints (`accounts.google.com` / `oauth2.googleapis.com`) — supply
-  real Google Cloud OAuth client credentials and `/oauth/Google/start`
-  performs a genuine authorization-code exchange. **Anthropic is
-  explicitly left unconfigured** with a comment explaining why: Anthropic
-  does not currently publish a general OAuth2 flow for API key
-  issuance, so fabricating endpoints for it would be dishonest. Use the
-  API key field for Anthropic — that's the correct method, not a
-  fallback.
-- **Sandbox execution now has a real caller.** A new Admin-only
-  `/Sandbox` screen runs submitted code through `DockerContainerSandbox`
-  and is audited on every run. It is still never invoked automatically
-  by the orchestration engine or any agent output path — that remains a
-  deliberate choice, not a gap.
-- **A real untrusted-content producer now feeds the trust-labeling
-  mechanism.** `TaskReferenceController.AttachFromUrl` fetches a
-  user-supplied URL and attaches the raw response text to a task via
-  `AttachReferenceMaterial(..., ContentTrustLevel.UntrustedExternalContent, ...)`.
-  This required fixing a real bug along the way: `MissionWorker` had
-  been creating fresh in-memory Mission/Task objects instead of loading
-  the ones `MissionsController` persisted, so anything attached before
-  a mission ran was silently discarded. Mission creation and starting
-  are now separate steps (`Create` then `Start`) specifically so there's
-  a window to attach reference material first — visible on the new
-  Mission Details screen.
-- **Pricing is now documented, not just configurable.**
-  `docs/PRICING.md` states plainly that the built-in fallback rates are
-  representative-only figures from when this project was built, not a
-  live feed, and explains exactly how to override them per model via
-  `Neura:ModelPricing`.
-- **Real Postgres integration test** — `PostgresIntegrationTests` spins
-  up an actual PostgreSQL container via Testcontainers and persists/
-  reloads a real entity through it, catching mapping issues (e.g. the
-  list-to-string value converters) that EF Core's InMemory provider
-  would silently tolerate. Skips gracefully if Docker isn't reachable
-  rather than failing the whole suite.
-- **Real SignalR round-trip test** — `SignalRRoundTripTests` connects an
-  actual `HubConnection` to the running test server and asserts a
-  genuine handshake, rather than mocking `IHubContext`.
-- **A real full-stack end-to-end test** —
-  `EndToEndMissionTests` registers a user through the real Identity
-  flow (parsing the antiforgery token out of rendered HTML the way a
-  browser would), creates and starts a mission over HTTP, and polls the
-  database until the background `MissionWorker` has actually driven it
-  to completion — the full path minus a browser automating the DOM.
-- **Notifications now have a real email delivery path.**
-  `SmtpEmailSender` sends genuine SMTP mail for the notification kinds
-  worth an inbox alert (security events, agent failures, provider
-  disconnects, cost thresholds) when `Neura:Smtp:Host` is configured; it
-  silently no-ops otherwise, so in-app notifications keep working with
-  zero configuration.
-- **Admin UI for role assignment** — a new `/Users` screen (Admin only)
-  lets you add/remove Admin/Operator/User/Auditor roles for any
-  registered user, closing the "direct database edit required" gap.
-- **Automated credential rotation** — `AIProviderAccount.Rotate` plus a
-  `Rotate` action on the Providers screen re-encrypts an account with a
-  freshly supplied key and audits the rotation; the old encrypted value
-  is fully replaced, never retained.
+## Browser-automated E2E test
 
-## What's still genuinely open
+`tests/Neura.E2E.Tests` uses Microsoft.Playwright to drive headless
+Chromium against an already-running NEURA instance. The test registers a
+user, follows the rendered navigation, creates a Simulation mission, checks
+the mission details rendered in the browser, and queues the mission. It verifies
+the rendered HTTP flow; it does not inspect database rows, assert that the
+background worker completed, or exercise real provider calls. The separate
+`EndToEndMissionTests` in `tests/Neura.Tests` polls the test database for a
+persisted `TaskCompleted` event after the worker runs the deterministic
+Simulation provider.
 
-No functional feature from the README is intentionally left unimplemented.
-The repository's GitHub Actions workflow is the authoritative build/test
-check and runs the full .NET build, integration suite, and browser E2E suite.
-Local Docker/production deployment should still be smoke-tested with the
-operator's real environment variables and provider credentials before a
-production release.
-
-## Browser-automated E2E test (closed this pass)
-
-`tests/Neura.E2E.Tests` uses Microsoft.Playwright to drive a real
-headless Chromium browser against a real Kestrel-hosted instance of the
-app (`PlaywrightWebApplicationFactory` starts an actual TCP listener on
-a random localhost port — not the in-memory HTTP handler
-`Neura.Tests`'s integration tests use). `BrowserMissionFlowTests`
-registers a user, logs in, navigates via the real rendered nav link,
-fills in and submits the real Create Mission form, clicks the real
-Start button, and asserts against the database that the browser's
-actions produced the expected server-side state — closing the one gap
-`EndToEndMissionTests` (HTTP-only, no browser) deliberately left open.
-
-**Running it:**
+**Running the browser test:**
 
 ```bash
-# Build the E2E project first; this generates playwright.ps1 in its output directory.
+# Build and install Playwright's Chromium browser once.
 dotnet build tests/Neura.E2E.Tests/Neura.E2E.Tests.csproj -c Release
-# One-time setup: install the browser binary Playwright drives.
 pwsh tests/Neura.E2E.Tests/bin/Release/net8.0/playwright.ps1 install chromium
-dotnet test tests/Neura.E2E.Tests/Neura.E2E.Tests.csproj -c Release
+
+# Start NEURA separately in another terminal, then:
+NEURA_E2E_BASE_URL=http://127.0.0.1:5080 \
+  dotnet test tests/Neura.E2E.Tests/Neura.E2E.Tests.csproj -c Release
 ```
 
-`.github/workflows/ci.yml` runs this as its own `browser-e2e` job (after
-the main build-and-test job passes), installing Chromium via
-`pwsh tests/Neura.E2E.Tests/bin/Release/net8.0/playwright.ps1 install --with-deps chromium` on the CI runner.
+The CI workflow starts the app on the runner and runs the browser test in a
+separate `browser-e2e` job after the main build-and-test job passes. Neither
+the browser test nor the simulation worker proves production-provider
+correctness.
 
-## Context Explorer graph view (closed this pass)
+## Context Explorer graph view
 
 `/Context` (Index) now renders a Cytoscape.js graph — Mission → Task →
 Package, one triple per persisted `ContextHandoffPackage` — using the
@@ -311,18 +278,16 @@ a second graph specific to that package: Package → category (Completed
 Work, Decisions, Files Changed, Errors, etc.) → individual item, capped
 at 8 items per category so the graph stays legible, with the existing
 full-text table kept alongside it as the non-visual/screen-reader
-alternative. This closes the "Context Explorer is still a plain table"
-gap from the previous pass.
+alternative.
 
 ## Final hardening notes
 
-- The Docker image runs as the non-root `neura` user and persists Data Protection keys in the writable `neura-dp-keys` volume.
-- Docker exposes the app over HTTP on port 8080 for the bundled development compose setup; authentication cookies use `SameAsRequest`, so they remain secure when HTTPS is used in production while still allowing the bundled HTTP smoke-test deployment to authenticate.
-- OpenTelemetry dependencies have been updated to the current 1.18 line; NuGet currently lists 1.18.0 as the latest OTLP exporter release and older 1.15.x and below as vulnerable. 
-- Google Gemini API credentials are sent in the `x-goog-api-key` header rather than a URL query parameter, avoiding accidental secret disclosure through proxy/server URL logs.
-- OAuth callback state is single-use and provider kinds are validated before token exchange.
-- The manual Docker sandbox drops all Linux capabilities and enables `no-new-privileges`, while retaining network isolation, read-only workspace/root filesystem, memory/CPU/PID limits, and a temporary filesystem.
-- API pricing returned by provider capability discovery now respects the configured `Neura:ModelPricing` overrides.
+- The Docker image runs as non-root UID 10001 (`neura`). Compose mounts the Data Protection key ring at `/app/dp-keys`; local file secrets are development-only, while the production example uses file-backed database and certificate secrets.
+- The development Compose profile binds HTTP and PostgreSQL to loopback on ports 8081/5433 and explicitly uses `SameAsRequest` cookies. The production example binds the app to loopback behind a trusted HTTPS proxy, requires exact host/proxy settings, and uses `Always` cookies.
+- Google Gemini API credentials are sent in the `x-goog-api-key` header rather than a URL query parameter.
+- OAuth callback state is single-use and provider kinds are validated, but OAuth remains disabled until provider-specific token and refresh behavior is implemented.
+- The manual Docker sandbox drops Linux capabilities and enables `no-new-privileges`, with network isolation, read-only root filesystem, resource limits, and temporary storage.
+- Model pricing is an operator-supplied estimate; built-in fallback rates are illustrative and are not live vendor pricing.
 
 ## License
 

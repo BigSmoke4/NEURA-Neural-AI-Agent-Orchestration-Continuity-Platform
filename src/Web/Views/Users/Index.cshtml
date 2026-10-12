@@ -2,6 +2,10 @@
 @{ ViewData["Title"] = "Users"; }
 <section class="panel" style="margin:1rem;">
     <h1 class="panel__title">User Management (Admin only)</h1>
+    @if (TempData["UserError"] is string userError)
+    {
+        <p class="validation-summary" role="alert">@userError</p>
+    }
     <table style="width:100%; border-collapse:collapse;">
         <thead><tr class="text-dim"><th>Email</th><th>Roles</th><th>Assign</th></tr></thead>
         <tbody>

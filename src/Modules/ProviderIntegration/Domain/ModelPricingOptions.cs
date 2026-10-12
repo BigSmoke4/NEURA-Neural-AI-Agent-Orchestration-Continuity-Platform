@@ -1,12 +1,11 @@
 namespace Neura.Modules.ProviderIntegration.Domain;
 
 /// <summary>
-/// Per-model pricing loaded from configuration (Neura:ModelPricing) so
-/// operators can update rates as vendors change them, without a code
-/// change or redeploy of the adapters themselves. Figures shipped in
-/// appsettings.json are illustrative placeholders — replace with each
-/// vendor's current published pricing before trusting Cost Center
-/// numbers; see docs/DATABASE.md and README Future Work.
+/// Per-model pricing loaded at application startup from configuration
+/// (Neura:ModelPricing). Operators can change rates without changing the
+/// provider adapter code, but the application must be restarted for the
+/// new values to take effect. Built-in fallback rates are illustrative;
+/// verify rates with each provider before relying on cost estimates.
 /// </summary>
 public sealed class ModelPricingOptions
 {

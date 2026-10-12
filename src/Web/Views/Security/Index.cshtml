@@ -2,18 +2,19 @@
 <section class="panel" style="margin:1rem;">
     <h1 class="panel__title">Security Center</h1>
 
-    <h2 class="panel__title">Connected Credentials</h2>
-    <p class="panel__hint">Only opaque credential references are ever shown — raw API keys are never stored or rendered anywhere in NEURA.</p>
-    <table style="width:100%; border-collapse:collapse; margin-bottom:1.5rem;">
-        <thead><tr class="text-dim"><th>Provider</th><th>Display Name</th><th>State</th><th>Credential Ref</th></tr></thead>
+    <h2 class="panel__title">Provider Accounts</h2>
+    <p class="panel__hint">Credential payloads are encrypted at rest and excluded from this page's view model; secret values are never displayed.</p>
+    <table class="data-table">
+        <thead><tr><th>Provider</th><th>Display Name</th><th>State</th><th>Last Health Check</th><th>Health Message</th></tr></thead>
         <tbody>
-        @foreach (var p in (IEnumerable<Neura.Modules.ProviderIntegration.Domain.AIProviderAccount>)ViewBag.Providers)
+        @foreach (var p in (IEnumerable<Neura.Web.ViewModels.ProviderAccountSummary>)ViewBag.Providers)
         {
             <tr>
                 <td>@p.Kind</td>
                 <td>@p.DisplayName</td>
                 <td>@p.State</td>
-                <td>@(p.ProtectedCredentialRef.Length > 6 ? $"••••{p.ProtectedCredentialRef[^4..]}" : "••••")</td>
+                <td>@(p.LastHealthCheckUtc?.ToString("u") ?? "—")</td>
+                <td>@(p.LastHealthMessage ?? "—")</td>
             </tr>
         }
         </tbody>

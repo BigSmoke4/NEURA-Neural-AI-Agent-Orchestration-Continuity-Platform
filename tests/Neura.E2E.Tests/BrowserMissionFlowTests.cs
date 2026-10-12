@@ -31,8 +31,17 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         var baseUrl = Environment.GetEnvironmentVariable("NEURA_E2E_BASE_URL") ?? "http://127.0.0.1:5080";
         var page = await _browser.NewPageAsync();
 
+        var browserErrors = new List<string>();
+        page.Console += (_, message) =>
+        {
+            if (message.Type == "error") browserErrors.Add(message.Text);
+        };
+
         // 1. Register through the real rendered form.
-        await page.GotoAsync($"{baseUrl}/Account/Register");
+        var registerResponse = await page.GotoAsync($"{baseUrl}/Account/Register");
+        Assert.NotNull(registerResponse);
+        Assert.Contains("script-src 'self'", registerResponse!.Headers["content-security-policy"], StringComparison.Ordinal);
+        Assert.True(await page.Locator("#role-code-wrap").IsHiddenAsync());
         var email = $"browser-e2e-{Guid.NewGuid():N}@example.com";
         await page.FillAsync("input[name='email']", email);
         await page.FillAsync("input[name='password']", "StrongP@ssw0rd123");
@@ -40,6 +49,19 @@ public class BrowserMissionFlowTests : IAsyncLifetime
 
         // Registration signs the user in and redirects to the Brain screen.
         await page.WaitForURLAsync($"{baseUrl}/Brain**", new PageWaitForURLOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync(
+            "() => typeof window.cytoscape === 'function' && typeof window.signalR?.HubConnectionBuilder === 'function'",
+            options: new PageWaitForFunctionOptions { Timeout = 10_000 });
+        AssertNoCspErrors(browserErrors);
+
+        // Graph pages use self-hosted Cytoscape under the same CSP.
+        await page.ClickAsync("a[href='/Context']");
+        await page.WaitForURLAsync($"{baseUrl}/Context**");
+        await page.WaitForFunctionAsync("() => typeof window.cytoscape === 'function'");
+        await page.ClickAsync("a[href='/Knowledge']");
+        await page.WaitForURLAsync($"{baseUrl}/Knowledge**");
+        await page.WaitForFunctionAsync("() => typeof window.cytoscape === 'function'");
+        AssertNoCspErrors(browserErrors);
 
         // 2. Navigate through the rendered navigation.
         await page.ClickAsync("a[href='/Missions']");
@@ -47,7 +69,7 @@ public class BrowserMissionFlowTests : IAsyncLifetime
 
         // 3. Fill in and submit the real Create Mission form.
         await page.FillAsync("input[name='title']", "Browser E2E Mission");
-        await page.FillAsync("input[name='objective']", "Prove the UI itself works, not just the HTTP API");
+        await page.FillAsync("textarea[name='objective']", "Prove the UI itself works, not just the HTTP API");
         await page.SelectOptionAsync("select[name='mode']", "Simulation");
         await page.ClickAsync("button:has-text('Create Mission')");
 
@@ -59,9 +81,18 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         await ExpectTextAsync(page, "Browser E2E Mission");
         await ExpectTextAsync(page, "Prove the UI itself works, not just the HTTP API");
 
-        // 4. Click the real Start button rendered on that page.
-        await page.ClickAsync("button:has-text('Start')");
+        // 4. Click the real queue action rendered on that page.
+        await page.ClickAsync("button:has-text('Queue mission')");
         await page.WaitForURLAsync($"{baseUrl}/Missions/Details/**");
+    }
+
+    private static void AssertNoCspErrors(IEnumerable<string> browserErrors)
+    {
+        var violations = browserErrors
+            .Where(error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.True(violations.Length == 0,
+            $"Browser reported CSP errors:{Environment.NewLine}{string.Join(Environment.NewLine, violations)}");
     }
 
     private static async Task ExpectTextAsync(IPage page, string text)

@@ -1,0 +1,56 @@
+@model Neura.Web.ViewModels.MemoryEditViewModel
+@{
+    ViewData["Title"] = "Edit project memory";
+}
+<section class="page-shell">
+    <div class="panel">
+        <p class="eyebrow">CONTINUITY / PROJECT MEMORY</p>
+        <h1 class="panel__title">Edit project memory</h1>
+        <p class="text-dim">Project scope: <code>@Model.ProjectId</code>. Changes apply only to this project's stored reference. Memory remains untrusted data when supplied to agents.</p>
+        <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+
+        <form method="post" asp-action="Edit" class="form-grid">
+            @Html.AntiForgeryToken()
+            <input asp-for="MemoryId" type="hidden" />
+            <label>Memory type
+                <select asp-for="Type" class="form-control">
+                    <option value="LongTermProject">Long-term project fact</option>
+                    <option value="Semantic">Semantic fact</option>
+                    <option value="Episodic">Episode / decision</option>
+                    <option value="Working">Working context</option>
+                    <option value="ShortTerm">Short-term note</option>
+                </select>
+            </label>
+            <label class="form-grid__wide">Memory content
+                <textarea asp-for="Content" maxlength="4000" rows="5" required class="form-control"></textarea>
+                <span asp-validation-for="Content" class="field-validation"></span>
+            </label>
+            <label>Importance (0–1)
+                <input asp-for="Importance" type="number" min="0" max="1" step="0.05" required class="form-control" />
+                <span asp-validation-for="Importance" class="field-validation"></span>
+            </label>
+            <label>Confidence (0–1)
+                <input asp-for="Confidence" type="number" min="0" max="1" step="0.05" required class="form-control" />
+                <span asp-validation-for="Confidence" class="field-validation"></span>
+            </label>
+            <label class="form-grid__wide">Tags (comma separated)
+                <input asp-for="Tags" maxlength="512" class="form-control" />
+                <span asp-validation-for="Tags" class="field-validation"></span>
+            </label>
+            <div class="form-grid__wide">
+                <label class="check-option">
+                    <input asp-for="KeepExpiration" type="checkbox" />
+                    Keep current expiry (@(Model.CurrentExpirationUtc?.ToString("u") ?? "No expiry"))
+                </label>
+                <label>New retention in days (leave blank for no expiry if “keep current” is unchecked)
+                    <input asp-for="RetentionDays" type="number" min="1" max="3650" class="form-control" />
+                    <span asp-validation-for="RetentionDays" class="field-validation"></span>
+                </label>
+            </div>
+            <div class="form-grid__wide form-actions">
+                <button type="submit" class="btn btn--primary">Save changes</button>
+                <a asp-action="Index" class="btn">Back to Memory Center</a>
+            </div>
+        </form>
+    </div>
+</section>

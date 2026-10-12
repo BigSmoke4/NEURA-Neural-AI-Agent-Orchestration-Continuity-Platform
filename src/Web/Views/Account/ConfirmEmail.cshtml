@@ -1,0 +1,24 @@
+@{ ViewData["Title"] = "Confirm email"; }
+<section class="panel account-panel account-panel--narrow">
+    <h1 class="panel__title">Confirm your email</h1>
+    @if (ViewBag.ConfirmationFailed is true)
+    {
+        <p class="status-note" role="status">This confirmation link is invalid, expired, or has already been used.</p>
+        <p><a asp-action="RegisterConfirmation">Request another confirmation link</a></p>
+    }
+    else if (ViewBag.CanConfirm is true)
+    {
+        <p>Submit to confirm the email address for your NEURA account.</p>
+        <form method="post" asp-action="ConfirmEmail">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="userId" value="@ViewBag.UserId" />
+            <input type="hidden" name="token" value="@ViewBag.Token" />
+            <button type="submit" class="btn btn--primary account-submit">Confirm email</button>
+        </form>
+    }
+    else
+    {
+        <p class="status-note" role="status">This confirmation link is invalid or expired.</p>
+        <p><a asp-action="RegisterConfirmation">Request another confirmation link</a></p>
+    }
+</section>

@@ -64,6 +64,18 @@ public sealed class ResilientProviderDecorator : IAIProvider
                 }
                 lastError = new Exception(response.ErrorMessage);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Cancellation is a caller/host decision, not a provider failure.
+                // Never retry a cancelled mission or convert it into a failed response.
+                throw;
+            }
+            catch (ProviderNotConfiguredException)
+            {
+                // A missing credential is configuration, not a transient outage.
+                // Preserve the explicit NOT CONFIGURED signal without retries.
+                throw;
+            }
             catch (Exception ex)
             {
                 lastError = ex;

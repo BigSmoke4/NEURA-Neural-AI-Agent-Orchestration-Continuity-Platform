@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Neura.Web.RateLimiting;
 using Neura.Modules.Execution.Domain;
 using Neura.Modules.Observability.Domain;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
@@ -15,7 +17,7 @@ namespace Neura.Web.Controllers;
 /// in the README. Every run is audited.
 /// </summary>
 [Authorize(Policy = "ManageSystem")]
-[EnableRateLimiting("provider-config")]
+[EnableRateLimiting(NeuraRateLimitPolicies.ProviderConfiguration)]
 public class SandboxController : Controller
 {
     private readonly IExecutionSandbox _sandbox;
@@ -36,7 +38,7 @@ public class SandboxController : Controller
         var request = new SandboxExecutionRequest(language, code, TimeSpan.FromSeconds(15));
         var result = await _sandbox.ExecuteAsync(request, ct);
 
-        await _audit.LogAsync(null, "SandboxExecuted", language, result.Success ? "Success" : "Failed",
+        await _audit.LogAsync(ResourceScope.UserId(User), "SandboxExecuted", language, result.Success ? "Success" : "Failed",
             Guid.NewGuid(), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
 
         ViewBag.Result = result;

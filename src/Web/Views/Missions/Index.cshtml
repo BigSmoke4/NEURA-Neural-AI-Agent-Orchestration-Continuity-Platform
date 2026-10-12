@@ -1,38 +1,64 @@
 @model IEnumerable<Neura.Modules.Orchestration.Domain.Mission>
 @{ ViewData["Title"] = "Mission Control"; }
+<section class="page-shell">
+    <div class="panel">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">ORCHESTRATION / QUEUE</p>
+                <h1 class="panel__title">Mission Control</h1>
+            </div>
+            <span class="badge">@Model.Count() RECENT</span>
+        </div>
 
-<section class="panel" style="margin:1rem;">
-    <h1 class="panel__title">Mission Control</h1>
+        <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+        <form method="post" asp-action="Create" class="form-grid form-grid--mission">
+            @Html.AntiForgeryToken()
+            <label>Mission title
+                <input name="title" maxlength="200" placeholder="Improve the checkout system" required class="form-control" />
+            </label>
+            <label>Execution mode
+                <select name="mode" class="form-control">
+                    <option value="Simulation">Simulation — deterministic, no provider credentials</option>
+                    <option value="Real">Real — uses your connected providers and agents</option>
+                </select>
+            </label>
+            <label>Project memory scope
+                <select name="projectId" class="form-control">
+                    <option value="">Create a new project scope</option>
+                    @foreach (var project in ViewBag.ProjectChoices)
+                    {
+                        <option value="@project.ProjectId">Reuse: @project.Label (@project.ProjectId)</option>
+                    }
+                </select>
+                <span class="text-dim">Reuse a project to retrieve its active memory in this mission.</span>
+            </label>
+            <label class="form-grid__wide">Objective
+                <textarea name="objective" maxlength="2000" rows="3" placeholder="Describe the outcome, constraints, and acceptance criteria." required class="form-control"></textarea>
+            </label>
+            <div class="form-grid__wide form-actions">
+                <button type="submit" class="btn btn--primary">＋ Create mission</button>
+            </div>
+        </form>
 
-    <form method="post" asp-action="Create" style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
-        @Html.AntiForgeryToken()
-        <input name="title" placeholder="Mission title" required class="btn" style="flex:1; min-width:200px;" />
-        <input name="objective" placeholder="Objective" required class="btn" style="flex:2; min-width:280px;" />
-        <select name="mode" class="btn">
-            <option value="Simulation">Simulation</option>
-            <option value="Real">Real</option>
-        </select>
-        <button type="submit" class="btn btn--primary">Create Mission</button>
-    </form>
-
-    <table style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr class="text-dim"><th>Title</th><th>Status</th><th>Mode</th><th>Created</th></tr>
-        </thead>
-        <tbody>
-        @foreach (var m in Model)
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Title</th><th>Status</th><th>Mode</th><th>Created (UTC)</th></tr></thead>
+                <tbody>
+                @foreach (var mission in Model)
+                {
+                    <tr>
+                        <td><a asp-action="Details" asp-route-id="@mission.Id">@mission.Title</a></td>
+                        <td><span class="status-pill status-pill--@mission.Status.ToString().ToLowerInvariant()">@mission.Status</span></td>
+                        <td>@mission.Mode</td>
+                        <td>@mission.CreatedAtUtc.ToString("u")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (!Model.Any())
         {
-            <tr>
-                <td><a asp-action="Details" asp-route-id="@m.Id">@m.Title</a></td>
-                <td>@m.Status</td>
-                <td>@m.Mode</td>
-                <td>@m.CreatedAtUtc.ToString("u")</td>
-            </tr>
+            <p class="empty-state">No missions yet. Create a Simulation mission for the deterministic handoff flow, or create a Real mission after connecting a provider and registering an agent.</p>
         }
-        </tbody>
-    </table>
-    @if (!Model.Any())
-    {
-        <p class="text-dim">No missions yet — create one above. Queued missions are picked up by the background MissionWorker, not run inline.</p>
-    }
+    </div>
 </section>

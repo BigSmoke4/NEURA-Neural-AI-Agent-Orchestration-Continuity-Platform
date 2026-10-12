@@ -1,15 +1,19 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.Observability.Domain;
 using Neura.Modules.Orchestration.Application;
+using Neura.Web.Observability;
 
 namespace Neura.Web.Hubs;
 
 /// <summary>
-/// Broadcasts live events over SignalR AND persists them as
-/// ExecutionEvent rows so completed missions can be replayed later
-/// (section 32/78) instead of only being visible while connected.
+/// Persists neural events for replay and broadcasts them only to the owning
+/// user plus the explicit operations/audit audience. A disconnected browser
+/// cannot fail orchestration, and a tenant cannot observe another tenant's
+/// mission payloads through the live event stream.
 /// </summary>
 public sealed class PersistingNeuralEventPublisher : INeuralEventPublisher
 {
@@ -29,21 +33,29 @@ public sealed class PersistingNeuralEventPublisher : INeuralEventPublisher
 
     public async Task PublishAsync(string eventType, object payload, CancellationToken ct = default)
     {
-        // Persistence is the durable source of truth for the replay timeline.
-        // A SignalR transport failure must never prevent an orchestration event
-        // from being recorded (or make a background mission appear stuck).
+        var missionId = TryGetGuid(payload, "MissionId") ?? Guid.Empty;
+        var ownerUserId = TryGetGuid(payload, "OwnerUserId");
+        var persistenceStarted = Stopwatch.GetTimestamp();
+
         try
         {
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<NeuraDbContext>();
 
-            var missionId = TryGetGuid(payload, "MissionId") ?? Guid.Empty;
-            var taskId = TryGetGuid(payload, "TaskId") ?? TryGetGuid(payload, "Id");
-            var agentId = TryGetGuid(payload, "AgentId") ?? TryGetGuid(payload, "Id");
+            if (!ownerUserId.HasValue && missionId != Guid.Empty)
+            {
+                ownerUserId = await db.Missions.AsNoTracking()
+                    .Where(m => m.Id == missionId)
+                    .Select(m => m.OwnerUserId)
+                    .FirstOrDefaultAsync(ct);
+            }
 
+            var taskId = TryGetGuid(payload, "TaskId");
+            var agentId = TryGetGuid(payload, "AgentId") ?? TryGetGuid(payload, "FromAgentId");
             var evt = ExecutionEvent.Record(missionId, taskId, agentId, eventType, JsonSerializer.Serialize(payload));
             db.ExecutionEvents.Add(evt);
             await db.SaveChangesAsync(ct);
+            NeuraMetrics.RecordEventPersisted(eventType);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -51,19 +63,30 @@ public sealed class PersistingNeuralEventPublisher : INeuralEventPublisher
         }
         catch (Exception ex)
         {
-            // Replay persistence should be observable. The orchestration engine
-            // remains responsible for deciding whether the mission itself failed.
+            // Replay persistence is a best-effort projection; the durable
+            // mission/task state remains authoritative.
+            NeuraMetrics.RecordEventPersistenceFailure(eventType);
             _logger.LogError(ex, "Failed to persist neural event {EventType} for replay.", eventType);
         }
+        finally
+        {
+            NeuraMetrics.RecordEventPersistenceDuration(Stopwatch.GetElapsedTime(persistenceStarted).TotalMilliseconds);
+        }
 
+        var broadcastStarted = Stopwatch.GetTimestamp();
+        NeuraMetrics.RecordSignalRBroadcastAttempt(eventType);
         try
         {
-            await _hub.Clients.Group(NeuralHub.BrainGroup).SendAsync("NeuralEvent", new
+            if (ownerUserId.HasValue)
             {
-                type = eventType,
-                timestamp = DateTime.UtcNow,
-                payload
-            }, ct);
+                await _hub.Clients.Group(NeuralHub.UserGroup(ownerUserId.Value))
+                    .SendAsync("NeuralEvent", CreateEnvelope(eventType, payload), ct);
+            }
+
+            // This group is only assigned to authenticated Admin/Auditor hub
+            // connections in NeuralHub.OnConnectedAsync.
+            await _hub.Clients.Group(NeuralHub.OperationsGroup)
+                .SendAsync("NeuralEvent", CreateEnvelope(eventType, payload), ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -71,16 +94,23 @@ public sealed class PersistingNeuralEventPublisher : INeuralEventPublisher
         }
         catch (Exception ex)
         {
-            // Live UI delivery is best-effort; a disconnected SignalR client
-            // must not fail a mission that has already been persisted.
+            NeuraMetrics.RecordSignalRBroadcastFailure(eventType);
             _logger.LogWarning(ex, "Failed to broadcast neural event {EventType} over SignalR.", eventType);
+        }
+        finally
+        {
+            NeuraMetrics.RecordSignalRBroadcastDuration(Stopwatch.GetElapsedTime(broadcastStarted).TotalMilliseconds);
         }
     }
 
+    private static object CreateEnvelope(string eventType, object payload)
+        => new { type = eventType, timestamp = DateTime.UtcNow, payload };
+
     private static Guid? TryGetGuid(object payload, string propertyName)
     {
-        var prop = payload.GetType().GetProperty(propertyName);
-        if (prop?.GetValue(payload) is Guid g) return g;
+        var property = payload.GetType().GetProperty(propertyName);
+        if (property?.GetValue(payload) is Guid id)
+            return id;
         return null;
     }
 }

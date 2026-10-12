@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
+using Neura.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Neura.Web.Controllers;
@@ -14,7 +15,10 @@ public class HandoffsController : Controller
 
     public async Task<IActionResult> Index(CancellationToken ct)
     {
-        var handoffs = await _db.Handoffs.OrderByDescending(h => h.CreatedAtUtc).Take(100).ToListAsync(ct);
+        var handoffs = await ResourceScope.Handoffs(_db.Handoffs, _db, User)
+            .OrderByDescending(h => h.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync(ct);
         return View(handoffs);
     }
 }
