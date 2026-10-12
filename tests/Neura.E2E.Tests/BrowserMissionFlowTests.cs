@@ -69,7 +69,7 @@ public class BrowserMissionFlowTests : IAsyncLifetime
 
         // 3. Fill in and submit the real Create Mission form.
         await page.FillAsync("input[name='title']", "Browser E2E Mission");
-        await page.FillAsync("input[name='objective']", "Prove the UI itself works, not just the HTTP API");
+        await page.FillAsync("textarea[name='objective']", "Prove the UI itself works, not just the HTTP API");
         await page.SelectOptionAsync("select[name='mode']", "Simulation");
         await page.ClickAsync("button:has-text('Create Mission')");
 
