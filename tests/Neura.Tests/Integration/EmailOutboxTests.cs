@@ -80,10 +80,15 @@ public sealed class EmailOutboxTests
         Assert.Equal(nameof(InvalidOperationException), message.LastFailureType);
         Assert.NotNull(message.ProtectedPayload);
         Assert.DoesNotContain("remote response included a secret", message.LastFailureType!, StringComparison.Ordinal);
+        var protector = services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("Neura.EmailOutbox.Payload.v1");
+        var persistedPayload = protector.Unprotect(message.ProtectedPayload!);
+        Assert.Contains("confirm-token", persistedPayload, StringComparison.Ordinal);
+        Assert.DoesNotContain("remote response included a secret", persistedPayload, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task RepeatedFailure_DeadLettersAfterConfiguredAttemptLimit()
+    public async Task FirstFailure_DeadLettersWhenConfiguredAttemptLimitIsOne()
     {
         var transport = new RecordingTransport { Failure = new InvalidOperationException("sensitive server reply") };
         using var services = CreateServices(transport, new EmailOutboxOptions { MaxAttempts = 1 });
@@ -117,7 +122,6 @@ public sealed class EmailOutboxTests
             configured.InitialRetryDelaySeconds = options?.InitialRetryDelaySeconds ?? 1;
             configured.MaximumRetryDelaySeconds = options?.MaximumRetryDelaySeconds ?? 10;
         });
-        services.AddSingleton(transport);
         services.AddSingleton<IEmailTransport>(transport);
         services.AddScoped<IEmailSender, EfEmailOutboxSender>();
         services.AddSingleton<IEmailOutboxDispatcher, EfEmailOutboxDispatcher>();

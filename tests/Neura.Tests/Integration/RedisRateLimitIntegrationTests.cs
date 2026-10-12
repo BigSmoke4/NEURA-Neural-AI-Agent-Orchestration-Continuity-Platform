@@ -70,7 +70,7 @@ public sealed class RedisRateLimitIntegrationTests : IAsyncLifetime
             Assert.True((await store.TryAcquireAsync("203.0.113.4", null, quota, null, CancellationToken.None)).IsAllowed);
 
             await _redis.StopAsync();
-            await Assert.ThrowsAnyAsync<Exception>(() => store.TryAcquireAsync(
+            await Assert.ThrowsAnyAsync<RedisException>(() => store.TryAcquireAsync(
                 "203.0.113.4", null, quota, null, CancellationToken.None));
             await connection.CloseAsync();
 
