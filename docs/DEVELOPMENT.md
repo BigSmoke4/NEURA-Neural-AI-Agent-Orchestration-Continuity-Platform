@@ -39,10 +39,11 @@ dotnet run --project src/Web/Web.csproj
 ```
 
 A fresh development database is created from the current EF model at app
-startup. **This repository does not yet contain an EF migration baseline**;
-`EnsureCreatedAsync` will not evolve an existing schema. Use a disposable
-local database while developing model changes, and establish/review real
-migrations before upgrading persistent production data.
+startup for convenience; `EnsureCreatedAsync` is only for disposable local
+data and will not evolve an existing schema. The checked-in
+`InitialBaseline` migration and model snapshot are the source of truth for
+retained environments. Follow `docs/DATABASE.md` to create reviewed future
+migrations and apply them before deployment.
 
 ## Provider and agent setup
 
@@ -90,9 +91,12 @@ dotnet build NEURA.sln -c Release
 dotnet test tests/Neura.Tests/Neura.Tests.csproj -c Release
 ```
 
-`Neura.Tests` contains unit and ASP.NET integration tests. One relational
-smoke test uses Testcontainers to create a PostgreSQL schema and round-trip
-an Agent; Docker startup failure fails the test fixture, so the test cannot
-silently report success without exercising PostgreSQL. `Neura.E2E.Tests`
-drives Chromium with Playwright against a separately
+`Neura.Tests` contains unit and ASP.NET integration tests. Testcontainers
+starts PostgreSQL and Redis: the PostgreSQL tests apply the checked-in
+migration, round-trip domain state, exercise relational outbox leasing across
+two dispatchers, and verify recovery behavior; Redis tests use independent
+multiplexers to prove shared global/named quotas and exercise fail-closed
+outage plus a replacement instance after recovery. Docker startup failure
+fails these fixtures rather than producing false-green results.
+`Neura.E2E.Tests` drives Chromium with Playwright against a separately
 started app; see the CI workflow for browser installation and server launch.

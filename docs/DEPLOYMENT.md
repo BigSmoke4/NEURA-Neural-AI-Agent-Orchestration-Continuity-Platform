@@ -59,12 +59,16 @@ provider credential before relying on the deployment.
    app accepts `Neura:Database:PasswordFile` so the database password can stay
    out of the connection-string environment variable. Staging/Production
    rejects missing and placeholder connection passwords.
-2. **Migration release gate:** no reviewed EF migration baseline is checked
-   in yet. Development/Testing may use `EnsureCreated` for disposable data;
-   other environments now fail fast unless a relational schema has a complete
-   applied migration history. Establish and review the baseline, apply it in a
-   dedicated deployment step, and only then start the Staging/Production web
-   tier. The application intentionally does not perform production DDL.
+2. **Migration release gate:** the reviewed `InitialBaseline` migration and
+   model snapshot are checked in. CI rejects model/snapshot drift, and the
+   PostgreSQL Testcontainers suite applies the baseline to a fresh database.
+   Development/Testing may use `EnsureCreated` for disposable data; other
+   environments fail fast unless the relational schema has a complete applied
+   migration history. Back up and rehearse the dedicated `dotnet ef database
+   update` step before starting the Staging/Production web tier; the app does
+   not perform production DDL. A database previously created with
+   `EnsureCreated` needs a separately reviewed/adopted schema plan, not a blind
+   baseline apply.
 3. Mission mode is selected per mission in the UI; there is no global
    `Neura:Mode` switch. Use a Real mission only after a user has connected
    an official provider API key and created an enabled agent with a
@@ -102,9 +106,12 @@ provider credential before relying on the deployment.
    optional key namespace is `Neura:RateLimiting:RedisKeyPrefix`. Without Redis,
    rate limits remain process-local. A configured Redis connection is required
    at startup; rate-limited requests fail closed with 503 during Redis errors,
-   while `/health/live` remains process-level. Test Redis failover, ACL/TLS,
-   key isolation, and quotas across app instances before relying on them.
-   Mission claims are atomic, active workers heartbeat persisted state, and a
+   while `/health/live` remains process-level. CI exercises shared quotas via
+   independent Redis multiplexers and verifies fail-closed outage plus recovery
+   through a replacement instance. Platform-specific Sentinel/Cluster
+   failover, ACL/TLS, network policy, and key isolation still need deployment
+   smoke tests before relying on them. Mission claims are atomic, active
+   workers heartbeat persisted state, and a
    stale-run sweep fails uncertain work without retrying provider requests.
    Tune `Neura:MissionRecovery` for the deployment and use synchronized UTC
    clocks across nodes. This is not checkpointed recovery or exactly-once
@@ -116,20 +123,27 @@ provider credential before relying on the deployment.
 9. Configure TLS-enabled SMTP host/port/sender and a password secret when
    authentication is used. Staging/Production require SMTP for email
    confirmation and password reset, and require `Neura:PublicOrigin` to build
-   trusted links. Delivery is not backed by a durable outbox: configure SMTP
-   monitoring and test failure/retry behavior before release. Confirmation
-   and reset links carry short-lived Identity tokens in query strings; redact
-   those parameters in reverse-proxy access logs. Development and Testing do
-   not require confirmed-email sign-in.
+   trusted links. Identity and significant notifications enqueue encrypted
+   payloads into PostgreSQL before returning; the hosted worker retries with
+   bounded exponential backoff and dead-letters after its configured attempt
+   limit. Delivery is at-least-once (a crash after SMTP acceptance can cause a
+   duplicate), and there is not yet a dead-letter admin/replay UI or sent-row
+   retention job. Share the persistent Data Protection key ring across every
+   worker instance, monitor worker/outbox logs and table growth, and validate
+   relay credentials/connectivity before release. Confirmation and reset links
+   carry short-lived Identity tokens in query strings; redact those parameters
+   in reverse-proxy access logs. Development and Testing do not require
+   confirmed-email sign-in.
 10. Keep `/Sandbox` disabled/restricted to an isolated operator network.
     It requires a Docker daemon and is manual only; it is not an automatic
     agent tool.
 
 ## CI and release gate
 
-`.github/workflows/ci.yml` restores/builds/tests the solution, runs unit and
-integration tests, and has a Playwright browser job. The PostgreSQL
-Testcontainers test requires Docker and fails if its container cannot start,
-so CI must provide a working Docker daemon. In this coding environment the
-.NET SDK/Docker daemon were unavailable, so run the CI workflow and
-smoke-test the target environment before release.
+`.github/workflows/ci.yml` restores/builds/tests the solution, verifies EF
+model/snapshot parity, runs PostgreSQL and Redis Testcontainers integration
+gates, and has a Playwright browser job. Container startup failures are test
+failures; CI must provide a working Docker daemon. The application-level gates
+are exercised in GitHub Actions, but also smoke-test the deployment's own
+PostgreSQL migration, Redis topology, SMTP relay, secret mounts, and restore
+procedure before release.

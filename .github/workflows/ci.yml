@@ -23,6 +23,20 @@ jobs:
       - name: Build
         run: dotnet build NEURA.sln --no-restore -c Release
 
+      - name: Install matching EF Core tooling
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.0.30
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Verify the EF migration snapshot matches the model
+        env:
+          NEURA_EF_CONNECTION_STRING: Host=localhost;Database=neura;Username=neura;Password=design-time-only
+        run: |
+          dotnet ef migrations has-pending-model-changes \
+            --project src/Infrastructure/Infrastructure.csproj \
+            --startup-project src/Web/Web.csproj \
+            --context NeuraDbContext
+
       - name: Unit + integration tests
         run: dotnet test tests/Neura.Tests/Neura.Tests.csproj --no-build -c Release --verbosity normal --logger "trx;LogFileName=neura-tests.trx"
         # PostgresIntegrationTests needs a Docker daemon, which GitHub-hosted
@@ -63,57 +77,6 @@ jobs:
           PY
         # GitHub's check annotations expose test failures even when raw runner
         # log downloads are unavailable to contributors.
-
-  # One-time scaffold for this release gate. Remove this temporary job after
-  # downloading and reviewing its migration artifact into the source tree.
-  scaffold-initial-migration:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'arena/048f16f8-neura-neural-ai-agent-orchestr'
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Install matching EF Core tooling
-        run: |
-          dotnet tool install --global dotnet-ef --version 8.0.30
-          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-
-      - name: Scaffold the reviewed model baseline
-        env:
-          NEURA_EF_CONNECTION_STRING: Host=localhost;Database=neura;Username=neura;Password=design-time-only
-        run: |
-          dotnet restore src/Web/Web.csproj
-          dotnet ef migrations add InitialBaseline \
-            --project src/Infrastructure/Infrastructure.csproj \
-            --startup-project src/Web/Web.csproj \
-            --context NeuraDbContext \
-            --output-dir Persistence/Migrations
-
-      - name: Commit generated baseline to the review branch
-        env:
-          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/Infrastructure/Persistence/Migrations
-          git commit -m "Add EF Core initial schema baseline"
-          git push origin "HEAD:${BRANCH_NAME}"
-
-      - name: Upload baseline migration and snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: neura-initial-baseline
-          path: src/Infrastructure/Persistence/Migrations/
-          if-no-files-found: error
-          retention-days: 7
 
   browser-e2e:
     runs-on: ubuntu-latest

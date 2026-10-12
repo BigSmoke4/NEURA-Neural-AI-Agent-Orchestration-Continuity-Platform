@@ -208,10 +208,12 @@ subsystem details, operational steps, and explicit limitations.
 
 ## Known gaps — this is not a production release yet
 
-- There is no reviewed EF migration/model snapshot yet. Development/Testing
-  use `EnsureCreated` only for disposable databases; Staging/Production now
-  fail fast until a reviewed migration baseline is applied. Schema upgrade
-  and rollback still must be validated before retaining production data.
+- The generated `InitialBaseline` EF migration and model snapshot are checked
+  in. CI verifies snapshot parity and applies it to a fresh PostgreSQL
+  Testcontainer. Development/Testing still use `EnsureCreated` only for
+  disposable databases; retained schemas created that way require a separately
+  reviewed adoption plan, and production backup/upgrade/rollback rehearsal
+  remains necessary.
 - Mission creation persists one starter task. Full AI mission decomposition,
   task DAG scheduling/parallelism, semantic memory search/decay, automatic
   knowledge-graph ingestion, and reviewed model-output fact extraction are
@@ -227,18 +229,22 @@ subsystem details, operational steps, and explicit limitations.
   inferred from a connected account rather than active health probes.
 - Provider/event metrics can export through OTLP, but dashboards, retention,
   and several domain metrics are incomplete. The CSP's temporary inline-style
-  allowance and a durable email outbox remain. Redis-backed distributed rate
-  limits are implemented but still require multi-instance/failover runtime
-  verification before production reliance.
-- Run the complete .NET build, tests, Docker smoke test, and CI workflow;
-  the .NET SDK and Docker daemon were unavailable in this coding sandbox.
+  allowance remains. Durable email is encrypted and retried through a
+  PostgreSQL outbox; delivery is at-least-once, with dead-letter admin/replay
+  and sent-row retention tooling still absent. Redis-backed quotas are verified
+  across independent clients and fail closed during outage; deployment-specific
+  Sentinel/Cluster failover, ACL/TLS, and network policy still need smoke tests.
+- GitHub Actions verifies the .NET build, unit/integration tests, PostgreSQL
+  migrations, Redis outage/recovery gates, and browser E2E. This sandbox has no
+  local .NET SDK or Docker daemon; production backup/restore and deployment
+  topology smoke tests remain release tasks.
 
 ## Browser-automated E2E test
 
 `tests/Neura.E2E.Tests` uses Microsoft.Playwright to drive headless
 Chromium against an already-running NEURA instance. The test registers a
 user, follows the rendered navigation, creates a Simulation mission, checks
-the mission details rendered in the browser, and clicks Start. It verifies
+the mission details rendered in the browser, and queues the mission. It verifies
 the rendered HTTP flow; it does not inspect database rows, assert that the
 background worker completed, or exercise real provider calls. The separate
 `EndToEndMissionTests` in `tests/Neura.Tests` polls the test database for a

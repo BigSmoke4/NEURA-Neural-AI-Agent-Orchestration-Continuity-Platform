@@ -46,6 +46,11 @@ services:
       Neura__Smtp__PasswordFile: /run/secrets/smtp_password
       Neura__Smtp__FromAddress: ${SMTP_FROM_ADDRESS:?Set a verified sender address}
       Neura__Smtp__EnableSsl: "true"
+      Neura__EmailOutbox__PollIntervalSeconds: ${EMAIL_OUTBOX_POLL_INTERVAL_SECONDS:-5}
+      Neura__EmailOutbox__LeaseDurationSeconds: ${EMAIL_OUTBOX_LEASE_DURATION_SECONDS:-300}
+      Neura__EmailOutbox__MaxAttempts: ${EMAIL_OUTBOX_MAX_ATTEMPTS:-12}
+      Neura__EmailOutbox__InitialRetryDelaySeconds: ${EMAIL_OUTBOX_INITIAL_RETRY_DELAY_SECONDS:-5}
+      Neura__EmailOutbox__MaximumRetryDelaySeconds: ${EMAIL_OUTBOX_MAX_RETRY_DELAY_SECONDS:-3600}
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-neura};Username=${POSTGRES_USER:-neura};Include Error Detail=false"
       Neura__Database__PasswordFile: /run/secrets/postgres_password
       Neura__DataProtectionKeyPath: /app/dp-keys

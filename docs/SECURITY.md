@@ -101,23 +101,30 @@ store provider passwords, or automate browser sessions.
   browser tests confirm every graph and page works with stylesheet-only
   styling.
 - Email confirmation and password reset use ASP.NET Core Identity tokens
-  delivered by the configured SMTP sender. Staging/Production require a valid
-  HTTPS `Neura:PublicOrigin` whose host is in `AllowedHosts`, a valid sender,
-  and TLS-enabled SMTP; production login requires a confirmed email. Confirmation
-  is POST-only after the link opens, and token pages are marked no-store with
-  no-referrer. Password-reset response content/status do not disclose whether
-  an account exists; SMTP is synchronous, so timing can still vary. Tokens
-  expire after three hours. Delivery is request-bound rather than backed by a
-  durable outbox, so monitor SMTP errors and support resends.
+  delivered by the configured SMTP transport through a durable PostgreSQL
+  outbox. The recipient, subject, and body are Data Protection-encrypted at
+  rest; error logs store only exception types, successful sends clear the
+  ciphertext, and bounded retries terminate in a dead-letter state. This is
+  at-least-once delivery, not exactly-once: a crash after SMTP acceptance but
+  before the sent marker can produce a duplicate. Share the protected Data
+  Protection key ring across instances and monitor dead letters/table growth;
+  operator replay and sent-row retention are not implemented. Staging/Production
+  require a valid HTTPS `Neura:PublicOrigin` whose host is in `AllowedHosts`, a
+  valid sender, and TLS-enabled SMTP; production login requires a confirmed
+  email. Confirmation is POST-only after the link opens, and token pages are
+  marked no-store with no-referrer. Password-reset response content/status do
+  not disclose whether an account exists. Tokens expire after three hours.
 - OAuth start/callback reject requests unless a provider is explicitly
   enabled. However, provider-specific bearer-token use and refresh-token
   rotation are not implemented; manually enabling the generic scaffold does
   not make it a supported provider integration. Keep OAuth disabled and use
   official API keys for the supported provider adapters.
-- No reviewed EF migration baseline exists yet. `EnsureCreatedAsync` is
-  restricted to Development/Testing; Staging/Production fail fast until the
-  migration set is present and fully applied. This is a release blocker until
-  the baseline is generated and validated.
+- A generated `InitialBaseline` migration and
+  `NeuraDbContextModelSnapshot` are checked in. `EnsureCreatedAsync` remains
+  restricted to Development/Testing. CI checks model/snapshot parity and
+  applies the migration to a fresh PostgreSQL Testcontainer; Staging/Production
+  fail fast until every migration is applied. Retained databases created by
+  `EnsureCreated` still need a separately reviewed adoption procedure.
 - Active missions heartbeat their persisted state. An independent recovery
   worker marks stale runs failed without automatic provider retries, avoiding
   duplicate side effects. This does not provide checkpointed resume or
