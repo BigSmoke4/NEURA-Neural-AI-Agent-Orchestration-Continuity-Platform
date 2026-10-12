@@ -24,10 +24,45 @@ jobs:
         run: dotnet build NEURA.sln --no-restore -c Release
 
       - name: Unit + integration tests
-        run: dotnet test tests/Neura.Tests/Neura.Tests.csproj --no-build -c Release --verbosity normal
+        run: dotnet test tests/Neura.Tests/Neura.Tests.csproj --no-build -c Release --verbosity normal --logger "trx;LogFileName=neura-tests.trx"
         # PostgresIntegrationTests needs a Docker daemon, which GitHub-hosted
         # ubuntu-latest runners provide out of the box; SignalRRoundTripTests
         # and EndToEndMissionTests need nothing beyond the .NET SDK.
+
+      - name: Annotate failed test details
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          namespace = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          failures = []
+          for path in glob.glob("tests/Neura.Tests/**/neura-tests.trx", recursive=True):
+              root = ET.parse(path).getroot()
+              for result in root.findall(".//trx:UnitTestResult", namespace):
+                  if result.get("outcome") != "Failed":
+                      continue
+                  name = result.get("testName", "unknown test")
+                  error = result.find("trx:Output/trx:ErrorInfo", namespace)
+                  message = error.findtext("trx:Message", default="", namespaces=namespace) if error is not None else ""
+                  stack = error.findtext("trx:StackTrace", default="", namespaces=namespace) if error is not None else ""
+                  detail = f"{name}: {message.strip()}\n{stack.strip()}".strip()
+                  failures.append(detail[:3000])
+
+          def escape_command_data(value):
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          for detail in failures[:20]:
+              print(f"::error title=Unit test failure::{escape_command_data(detail)}")
+          if not failures:
+              print("No failed-test details were found in TRX output.")
+          elif len(failures) > 20:
+              print(f"::error title=Unit test failure summary::Showing 20 of {len(failures)} failures.")
+          PY
+        # GitHub's check annotations expose test failures even when raw runner
+        # log downloads are unavailable to contributors.
 
   browser-e2e:
     runs-on: ubuntu-latest
