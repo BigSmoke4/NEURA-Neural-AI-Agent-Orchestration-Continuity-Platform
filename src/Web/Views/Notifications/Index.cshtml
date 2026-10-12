@@ -13,7 +13,7 @@
                 <td>@n.Message</td>
                 <td>@(n.IsRead ? "Yes" : "No")</td>
                 <td>
-                    @if (!n.IsRead)
+                    @if (!n.IsRead && (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User")))
                     {
                         <form method="post" asp-action="MarkRead" asp-route-id="@n.Id">
                             <button class="btn btn--icon" type="submit">Mark read</button>

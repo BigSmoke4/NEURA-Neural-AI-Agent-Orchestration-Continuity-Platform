@@ -6,7 +6,15 @@ obj/
 appsettings.Development.json
 appsettings.Production.json
 .env
+.env.*
+!.env.example
+!.env.production.example
 dp-keys/
+/secrets/
+*.pfx
+*.p12
+*.key
+*.pem
 *.log
 ms-playwright/
 TestResults/

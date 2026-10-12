@@ -1,11 +1,10 @@
 namespace Neura.Web.Middleware;
 
 /// <summary>
-/// Section 59: baseline security headers against clickjacking, MIME
-/// sniffing, and unintended cross-origin leakage. A Content-Security-Policy
-/// is intentionally left commented — the Cytoscape.js and SignalR CDN
-/// scripts loaded in _Layout.cshtml need their exact hosts allow-listed
-/// before CSP can be turned on without breaking the neural graph.
+/// Baseline browser security policy. Scripts are self-hosted and same-origin;
+/// inline JavaScript and event-handler attributes are blocked. Inline styles
+/// remain enabled temporarily because existing Razor views and Cytoscape use
+/// style attributes; migrate those to stylesheets before removing that grant.
 /// </summary>
 public sealed class SecurityHeadersMiddleware
 {
@@ -18,9 +17,42 @@ public sealed class SecurityHeadersMiddleware
         context.Response.Headers["X-Content-Type-Options"] = "nosniff";
         context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
         context.Response.Headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()";
-        // context.Response.Headers["Content-Security-Policy"] =
-        //     "default-src 'self'; script-src 'self' cdnjs.cloudflare.com; connect-src 'self' wss:;";
+        context.Response.Headers["Content-Security-Policy"] =
+            "default-src 'self'; " +
+            "base-uri 'self'; " +
+            "object-src 'none'; " +
+            "frame-ancestors 'none'; " +
+            "form-action 'self'; " +
+            "script-src 'self'; " +
+            "script-src-attr 'none'; " +
+            "style-src 'self'; " +
+            "style-src-attr 'unsafe-inline'; " +
+            "img-src 'self' data:; " +
+            "font-src 'self' data:; " +
+            $"connect-src {BuildConnectSources(context.Request)}; " +
+            "manifest-src 'self'; " +
+            "worker-src 'self' blob:";
 
         await _next(context);
+    }
+
+    private static string BuildConnectSources(HttpRequest request)
+    {
+        const string selfSource = "'self'";
+        if (!request.Host.HasValue)
+            return selfSource;
+
+        var host = request.Host.Host.Trim('[', ']');
+        if (Uri.CheckHostName(host) == UriHostNameType.Unknown)
+            return selfSource;
+
+        var authority = host.Contains(':')
+            ? $"[{host}]"
+            : host;
+        if (request.Host.Port is int port && port >= 0)
+            authority += $":{port}";
+
+        var websocketScheme = request.IsHttps ? "wss" : "ws";
+        return $"{selfSource} {websocketScheme}://{authority}";
     }
 }

@@ -19,6 +19,6 @@
     </table>
     @if (!Model.Any())
     {
-        <p class="text-dim">No handoffs recorded yet. Note: the current OrchestrationEngine builds HandoffRecord objects in-memory during a run — persist them via NeuraDbContext.Handoffs.Add(...) in OrchestrationEngine or a domain-event handler to see them here.</p>
+        <p class="text-dim">No handoffs recorded yet. Each validated transfer is persisted with its reason, source, receiver, package reference, and terminal validation state.</p>
     }
 </section>

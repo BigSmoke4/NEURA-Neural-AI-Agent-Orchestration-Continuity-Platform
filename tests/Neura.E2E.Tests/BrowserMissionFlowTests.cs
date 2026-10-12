@@ -31,8 +31,17 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         var baseUrl = Environment.GetEnvironmentVariable("NEURA_E2E_BASE_URL") ?? "http://127.0.0.1:5080";
         var page = await _browser.NewPageAsync();
 
+        var browserErrors = new List<string>();
+        page.Console += (_, message) =>
+        {
+            if (message.Type == "error") browserErrors.Add(message.Text);
+        };
+
         // 1. Register through the real rendered form.
-        await page.GotoAsync($"{baseUrl}/Account/Register");
+        var registerResponse = await page.GotoAsync($"{baseUrl}/Account/Register");
+        Assert.NotNull(registerResponse);
+        Assert.Contains("script-src 'self'", registerResponse!.Headers["content-security-policy"], StringComparison.Ordinal);
+        Assert.True(await page.Locator("#role-code-wrap").IsHiddenAsync());
         var email = $"browser-e2e-{Guid.NewGuid():N}@example.com";
         await page.FillAsync("input[name='email']", email);
         await page.FillAsync("input[name='password']", "StrongP@ssw0rd123");
@@ -40,6 +49,21 @@ public class BrowserMissionFlowTests : IAsyncLifetime
 
         // Registration signs the user in and redirects to the Brain screen.
         await page.WaitForURLAsync($"{baseUrl}/Brain**", new PageWaitForURLOptions { Timeout = 10_000 });
+        await page.WaitForFunctionAsync(
+            "() => typeof window.cytoscape === 'function' && typeof window.signalR?.HubConnectionBuilder === 'function'",
+            options: new PageWaitForFunctionOptions { Timeout = 10_000 });
+        Assert.DoesNotContain(browserErrors,
+            error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase));
+
+        // Graph pages use self-hosted Cytoscape under the same CSP.
+        await page.ClickAsync("a[href='/Context']");
+        await page.WaitForURLAsync($"{baseUrl}/Context**");
+        await page.WaitForFunctionAsync("() => typeof window.cytoscape === 'function'");
+        await page.ClickAsync("a[href='/Knowledge']");
+        await page.WaitForURLAsync($"{baseUrl}/Knowledge**");
+        await page.WaitForFunctionAsync("() => typeof window.cytoscape === 'function'");
+        Assert.DoesNotContain(browserErrors,
+            error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase));
 
         // 2. Navigate through the rendered navigation.
         await page.ClickAsync("a[href='/Missions']");

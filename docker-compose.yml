@@ -4,9 +4,11 @@ services:
     environment:
       POSTGRES_DB: neura
       POSTGRES_USER: neura
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    secrets:
+      - postgres_password
     volumes:
       - neura-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -21,17 +23,25 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${WEB_HOST_PORT:-8081}:8080"
+      - "127.0.0.1:${WEB_HOST_PORT:-8081}:8080"
     environment:
-      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=neura;Username=neura;Password=${POSTGRES_PASSWORD:-devpassword}"
-      Neura__Mode: Simulation
-      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=neura;Username=neura;Include Error Detail=false"
+      Neura__Database__PasswordFile: /run/secrets/postgres_password
+      Neura__DataProtectionKeyPath: /app/dp-keys
+      ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
+      Neura__Security__CookieSecurePolicy: SameAsRequest
       Neura__Registration__RoleCodes__Operator: ${NEURA_OPERATOR_REGISTRATION_CODE:-}
       Neura__Registration__RoleCodes__Auditor: ${NEURA_AUDITOR_REGISTRATION_CODE:-}
       Neura__Registration__RoleCodes__Admin: ${NEURA_ADMIN_REGISTRATION_CODE:-}
+    secrets:
+      - postgres_password
     volumes:
       - neura-dp-keys:/app/dp-keys
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?Set POSTGRES_PASSWORD_FILE to a secret file path}
 
 volumes:
   neura-postgres-data:

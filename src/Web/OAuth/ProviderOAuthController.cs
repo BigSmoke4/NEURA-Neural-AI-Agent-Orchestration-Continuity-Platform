@@ -46,8 +46,8 @@ public class ProviderOAuthController : Controller
             return BadRequest("Unsupported provider kind.");
 
         var options = _configuration.GetSection($"Neura:OAuth:{kind}").Get<OAuthProviderOptions>();
-        if (options is null || string.IsNullOrEmpty(options.AuthorizationEndpoint) || string.IsNullOrEmpty(options.ClientId))
-            return NotFound($"OAuth is not configured for provider '{kind}'. Configure Neura:OAuth:{kind} or use the API key connection method instead.");
+        if (options is null || !options.Enabled || string.IsNullOrEmpty(options.AuthorizationEndpoint) || string.IsNullOrEmpty(options.ClientId))
+            return NotFound($"OAuth is not enabled for provider '{kind}'. Configure a provider-specific authorization and token-refresh implementation or use the API key connection method instead.");
 
         var state = Guid.NewGuid().ToString("N");
         HttpContext.Session.SetString($"oauth_state_{kind}", state);
@@ -70,8 +70,8 @@ public class ProviderOAuthController : Controller
             return BadRequest("Invalid OAuth state — possible CSRF attempt or expired session.");
 
         var options = _configuration.GetSection($"Neura:OAuth:{kind}").Get<OAuthProviderOptions>();
-        if (options is null || string.IsNullOrEmpty(options.TokenEndpoint))
-            return NotFound($"OAuth is not configured for provider '{kind}'.");
+        if (options is null || !options.Enabled || string.IsNullOrEmpty(options.TokenEndpoint))
+            return NotFound($"OAuth is not enabled for provider '{kind}'.");
 
         var client = _httpClientFactory.CreateClient("oauth-token-exchange");
         var tokenResponse = await client.PostAsync(options.TokenEndpoint, new FormUrlEncodedContent(new Dictionary<string, string>

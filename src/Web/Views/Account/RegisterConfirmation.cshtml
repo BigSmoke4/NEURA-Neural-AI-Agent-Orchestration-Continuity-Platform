@@ -1,0 +1,13 @@
+@{ ViewData["Title"] = "Check your email"; }
+<section class="panel account-panel account-panel--narrow">
+    <h1 class="panel__title">Check your email</h1>
+    <p>If the account is eligible, NEURA has sent a confirmation link. The link expires after three hours.</p>
+    <p class="panel__hint">Didn't receive it? Enter the address again to request a new link. The response is the same whether or not an account exists.</p>
+    <form method="post" asp-action="ResendConfirmation">
+        @Html.AntiForgeryToken()
+        <label class="panel__hint" for="confirmation-email">Email</label>
+        <input id="confirmation-email" name="email" type="email" required autocomplete="email" class="btn account-input" />
+        <button type="submit" class="btn btn--primary account-submit">Resend confirmation</button>
+    </form>
+    <p class="panel__hint"><a asp-action="Login">Return to sign in</a></p>
+</section>

@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="~/css/typography.css" />
     <link rel="stylesheet" href="~/css/panels.css" />
     <link rel="stylesheet" href="~/css/buttons.css" />
+    <link rel="stylesheet" href="~/css/forms.css" />
+    <link rel="stylesheet" href="~/css/tables.css" />
     <link rel="stylesheet" href="~/css/neural-graph.css" />
     <link rel="stylesheet" href="~/css/dashboard.css" />
     <link rel="stylesheet" href="~/css/responsive.css" />
@@ -23,16 +25,16 @@
             <span class="topbar__title">NEURA</span>
         </div>
         <div class="topbar__status" aria-live="polite">
-            <span class="led led--online" aria-hidden="true"></span>
-            <span id="system-status-text">SYSTEM ONLINE</span>
+            <span class="led led--unknown" id="realtime-status-led" aria-hidden="true"></span>
+            <span id="system-status-text">LIVE FEED NOT CONNECTED</span>
             <span class="topbar__divider">|</span>
-            <span id="agent-count-text">0 AGENTS</span>
+            <span id="agent-count-text">AGENTS OBSERVED: —</span>
         </div>
         <nav class="topbar__nav" aria-label="Primary">
             <a href="/Brain">Brain</a>
             @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User")) { <a href="/Missions">Missions</a> }
-            @if (User.IsInRole("Admin") || User.IsInRole("Operator")) { <a href="/Agents">Agents</a> }
-            @if (User.IsInRole("Admin")) { <a href="/Providers">Providers</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User")) { <a href="/Agents">Agents</a> }
+            @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User")) { <a href="/Providers">Providers</a> }
             @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Handoffs">Handoffs</a> }
             @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Memory">Memory</a> }
             @if (User.IsInRole("Admin") || User.IsInRole("Operator") || User.IsInRole("User") || User.IsInRole("Auditor")) { <a href="/Knowledge">Knowledge</a> }
@@ -60,14 +62,14 @@
         @RenderBody()
     </main>
 
-    <footer class="statusbar" role="contentinfo" aria-label="System metrics">
-        <span>CPU <b id="metric-cpu">—</b></span>
-        <span>TOKENS <b id="metric-tokens">0</b></span>
-        <span>CONTEXT <b id="metric-context">0%</b></span>
-        <span>TASKS <b id="metric-tasks">0</b></span>
-        <span>HANDOFFS <b id="metric-handoffs">0</b></span>
-        <span>COST <b id="metric-cost">$0.00</b></span>
-        <span>HEALTH <b id="metric-health">OK</b></span>
+    <footer class="statusbar" role="contentinfo" aria-label="Session event metrics">
+        <span>CPU <b id="metric-cpu" title="CPU telemetry is not implemented">Not instrumented</b></span>
+        <span>LAST TOKENS <b id="metric-tokens">—</b></span>
+        <span>LAST CONTEXT <b id="metric-context">—</b></span>
+        <span>TASK START EVENTS <b id="metric-tasks">0</b></span>
+        <span>VALIDATED HANDOFFS <b id="metric-handoffs">0</b></span>
+        <span>EST. COST THIS PAGE <b id="metric-cost" title="Estimated provider cost for events received since this page loaded">$0.0000</b></span>
+        <span>DB READINESS <b id="metric-health" title="Database readiness has not been probed from this page">Not checked</b></span>
     </footer>
 
     @RenderSection("Scripts", required: false)

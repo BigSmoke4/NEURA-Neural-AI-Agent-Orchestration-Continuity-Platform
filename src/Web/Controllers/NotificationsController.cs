@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
@@ -14,15 +15,20 @@ public class NotificationsController : Controller
 
     public async Task<IActionResult> Index(CancellationToken ct)
     {
-        var notifications = await _db.Notifications.OrderByDescending(n => n.CreatedAtUtc).Take(100).ToListAsync(ct);
+        var notifications = await ResourceScope.Notifications(_db.Notifications, _db, User)
+            .OrderByDescending(n => n.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync(ct);
         return View(notifications);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize(Policy = "ManageNotifications")]
     public async Task<IActionResult> MarkRead(Guid id, CancellationToken ct)
     {
-        var notification = await _db.Notifications.FirstOrDefaultAsync(n => n.Id == id, ct);
+        var notification = await ResourceScope.Notifications(_db.Notifications, _db, User)
+            .FirstOrDefaultAsync(n => n.Id == id, ct);
         if (notification is null) return NotFound();
         notification.MarkRead();
         await _db.SaveChangesAsync(ct);
@@ -31,5 +37,6 @@ public class NotificationsController : Controller
 
     [HttpGet]
     public async Task<IActionResult> UnreadCount(CancellationToken ct)
-        => Json(new { count = await _db.Notifications.CountAsync(n => !n.IsRead, ct) });
+        => Json(new { count = await ResourceScope.Notifications(_db.Notifications, _db, User)
+            .CountAsync(n => !n.IsRead, ct) });
 }

@@ -3,13 +3,14 @@
 <section class="panel" style="margin:1rem;">
     <h1 class="panel__title">Execution Timeline</h1>
     <form method="get" style="margin-bottom:1rem;">
-        <select name="missionId" class="btn" onchange="this.form.submit()">
+        <select name="missionId" class="btn">
             <option value="">All missions</option>
             @foreach (var m in ViewBag.Missions)
             {
                 <option value="@m.Id" selected="@(ViewBag.MissionId == m.Id)">@m.Title</option>
             }
         </select>
+        <button type="submit" class="btn">Filter</button>
     </form>
     <ol style="font-family:var(--font-mono); font-size:0.8rem;">
         @foreach (var e in Model)

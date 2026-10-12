@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.Observability.Domain;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
@@ -44,13 +45,27 @@ public class UsersController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignRole(Guid userId, string role, CancellationToken ct)
     {
-        if (!AssignableRoles.Contains(role)) return BadRequest("Unknown role.");
+        if (!AssignableRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
+            return BadRequest("Unknown role.");
+        role = AssignableRoles.First(allowed => allowed.Equals(role, StringComparison.OrdinalIgnoreCase));
 
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return NotFound();
 
-        await _userManager.AddToRoleAsync(user, role);
-        await _audit.LogAsync(userId, "RoleAssigned", role, "Success", Guid.NewGuid(), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        var actorUserId = ResourceScope.UserId(User);
+        var correlationId = Guid.NewGuid();
+        var result = await _userManager.AddToRoleAsync(user, role);
+        if (!result.Succeeded)
+        {
+            await _audit.LogAsync(actorUserId, "RoleAssigned", $"{user.Id}; role={role}",
+                "Failed: " + string.Join(",", result.Errors.Select(error => error.Code)), correlationId,
+                HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+            TempData["UserError"] = "The role could not be assigned.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _audit.LogAsync(actorUserId, "RoleAssigned", $"{user.Id}; role={role}", "Success",
+            correlationId, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return RedirectToAction(nameof(Index));
     }
 
@@ -58,11 +73,41 @@ public class UsersController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveRole(Guid userId, string role, CancellationToken ct)
     {
+        if (!AssignableRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
+            return BadRequest("Unknown role.");
+        role = AssignableRoles.First(allowed => allowed.Equals(role, StringComparison.OrdinalIgnoreCase));
+
         var user = await _userManager.FindByIdAsync(userId.ToString());
         if (user is null) return NotFound();
 
-        await _userManager.RemoveFromRoleAsync(user, role);
-        await _audit.LogAsync(userId, "RoleRemoved", role, "Success", Guid.NewGuid(), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        var actorUserId = ResourceScope.UserId(User);
+        var correlationId = Guid.NewGuid();
+        if (role == "Admin" && await _userManager.IsInRoleAsync(user, "Admin"))
+        {
+            var adminsRemaining = (await _userManager.GetUsersInRoleAsync("Admin"))
+                .Count(admin => admin.Id != user.Id);
+            if (adminsRemaining == 0)
+            {
+                await _audit.LogAsync(actorUserId, "RoleRemoved", $"{user.Id}; role={role}",
+                    "Rejected: last Admin would be removed", correlationId,
+                    HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+                TempData["UserError"] = "At least one Admin account must remain assigned.";
+                return RedirectToAction(nameof(Index));
+            }
+        }
+
+        var result = await _userManager.RemoveFromRoleAsync(user, role);
+        if (!result.Succeeded)
+        {
+            await _audit.LogAsync(actorUserId, "RoleRemoved", $"{user.Id}; role={role}",
+                "Failed: " + string.Join(",", result.Errors.Select(error => error.Code)), correlationId,
+                HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+            TempData["UserError"] = "The role could not be removed.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _audit.LogAsync(actorUserId, "RoleRemoved", $"{user.Id}; role={role}", "Success",
+            correlationId, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return RedirectToAction(nameof(Index));
     }
 }

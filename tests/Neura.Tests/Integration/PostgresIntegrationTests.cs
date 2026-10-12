@@ -1,22 +1,28 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.AgentManagement.Domain;
+using Neura.Modules.Handoff.Domain;
+using Neura.Modules.Orchestration.Application;
+using Neura.Modules.Orchestration.Domain;
+using Neura.Web.Workers;
 using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Neura.Tests.Integration;
 
 /// <summary>
-/// Real integration test against an actual PostgreSQL instance, spun up
-/// on demand in a Docker container via Testcontainers — not EF Core's
-/// InMemory provider. Confirms migrations/mappings genuinely work
-/// against Postgres (list-to-string value converters, Identity's own
-/// schema, etc.), which InMemory silently tolerates but a real
-/// relational engine will not if a mapping is wrong.
+/// Relational smoke test against an actual PostgreSQL instance started
+/// on demand through Testcontainers, not EF Core's InMemory provider.
+/// Creates the current schema with EnsureCreated, round-trips an Agent, and
+/// exercises stale-mission recovery's relational compare-and-set, transaction,
+/// task, and handoff updates. It does not exercise EF migrations (none are
+/// checked in yet).
 ///
-/// Requires a Docker daemon reachable from wherever `dotnet test` runs
-/// (including CI) — see .github/workflows/ci.yml. Skips gracefully if
-/// Docker isn't available rather than failing the whole suite.
+/// Requires a Docker daemon reachable from `dotnet test` (including CI).
+/// Container startup failures intentionally fail the test fixture rather
+/// than producing a false-green PostgreSQL test result.
 /// </summary>
 public class PostgresIntegrationTests : IAsyncLifetime
 {
@@ -27,32 +33,13 @@ public class PostgresIntegrationTests : IAsyncLifetime
         .WithPassword("test_password")
         .Build();
 
-    private bool _dockerAvailable = true;
+    public Task InitializeAsync() => _container.StartAsync();
 
-    public async Task InitializeAsync()
-    {
-        try
-        {
-            await _container.StartAsync();
-        }
-        catch
-        {
-            _dockerAvailable = false;
-        }
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (_dockerAvailable)
-            await _container.DisposeAsync();
-    }
+    public async Task DisposeAsync() => await _container.DisposeAsync();
 
     [Fact]
-    public async Task CanCreateSchemaAndPersistAnAgent_AgainstRealPostgres()
+    public async Task CanPersistAgentAndRecoverStaleMission_AgainstRealPostgres()
     {
-        if (!_dockerAvailable)
-            return; // Docker not available in this environment — see class doc comment.
-
         var options = new DbContextOptionsBuilder<NeuraDbContext>()
             .UseNpgsql(_container.GetConnectionString())
             .Options;
@@ -70,5 +57,58 @@ public class PostgresIntegrationTests : IAsyncLifetime
         Assert.Equal("Test Agent", reloaded!.Name);
         Assert.Contains(AgentCapability.Coding, reloaded.Capabilities);
         Assert.Contains(AgentCapability.Testing, reloaded.Capabilities);
+
+        var mission = Mission.Create(Guid.NewGuid(), "Stale run", "Recover without replay", MissionMode.Real, Guid.NewGuid());
+        mission.SetStatus(MissionStatus.Running);
+        var task = AgentTask.Create(mission.Id, "Provider task", nameof(AgentCapability.Coding), 1);
+        task.Start();
+        var handoff = HandoffRecord.Create(mission.Id, task.Id, agent.Id, HandoffReason.ProviderFailure, Guid.NewGuid());
+        handoff.BeginTransfer();
+        db.Missions.Add(mission);
+        db.Tasks.Add(task);
+        db.Handoffs.Add(handoff);
+        await db.SaveChangesAsync();
+
+        var staleTimestamp = DateTime.UtcNow.AddHours(-1);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE \"Missions\" SET \"UpdatedAtUtc\" = {staleTimestamp} WHERE \"Id\" = {mission.Id}");
+
+        var events = new RecordingEventPublisher();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddDbContext<NeuraDbContext>(options => options.UseNpgsql(_container.GetConnectionString()));
+        using var serviceProvider = services.BuildServiceProvider();
+        var recovery = new MissionRecoveryService(
+            serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<MissionRecoveryService>.Instance,
+            events,
+            new MissionRecoveryOptions
+            {
+                HeartbeatIntervalSeconds = 1,
+                StaleRunningTimeoutSeconds = 3,
+                RecoverySweepIntervalSeconds = 1
+            });
+
+        Assert.Equal(1, await recovery.RecoverStaleRunningMissionsAsync(CancellationToken.None));
+        Assert.Equal(new[] { NeuralEventTypes.MissionFailed }, events.EventTypes);
+
+        var failedMission = await db.Missions.AsNoTracking().SingleAsync(m => m.Id == mission.Id);
+        var failedTask = await db.Tasks.AsNoTracking().SingleAsync(t => t.Id == task.Id);
+        var failedHandoff = await db.Handoffs.AsNoTracking().SingleAsync(h => h.Id == handoff.Id);
+        Assert.Equal(MissionStatus.Failed, failedMission.Status);
+        Assert.Equal(TaskStatus2.Failed, failedTask.Status);
+        Assert.Equal(HandoffState.Failed, failedHandoff.State);
+    }
+
+    private sealed class RecordingEventPublisher : INeuralEventPublisher
+    {
+        public List<string> EventTypes { get; } = new();
+
+        public Task PublishAsync(string eventType, object payload, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            EventTypes.Add(eventType);
+            return Task.CompletedTask;
+        }
     }
 }

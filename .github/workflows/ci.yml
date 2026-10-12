@@ -54,7 +54,6 @@ jobs:
         env:
           ASPNETCORE_ENVIRONMENT: Testing
           ASPNETCORE_URLS: http://127.0.0.1:5080
-          Neura__Mode: Simulation
           Neura__DataProtectionKeyPath: ${{ runner.temp }}/neura-dp-keys
         run: |
           mkdir -p "${{ runner.temp }}/neura-dp-keys"

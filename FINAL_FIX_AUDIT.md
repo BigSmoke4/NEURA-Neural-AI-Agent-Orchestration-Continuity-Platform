@@ -1,48 +1,107 @@
-# NEURA Final Fix Audit
+# NEURA verification status
 
-This build is based on the previously Docker-verified `NEURA-fixed-dp-keys` source.
+**Updated: 2026-10-12.** This file describes the current workspace state; it
+is not a release certification.
 
-## Fixed in this final pass
+## Checks performed in this workspace
 
-- Preserved the explicit `MemoryRecord.MemoryId` EF primary-key mapping.
-- Preserved the Docker Data Protection key-ring permission fix and non-root runtime user.
-- Updated OpenTelemetry packages from 1.9.0 to 1.18.0, including the OTLP exporter that was producing the NU1902 vulnerability warning.
-- Updated .NET 8 Microsoft packages to the current 8.0.30 patch line where referenced, and Npgsql EF Core to 8.0.11.
-- Removed the Docker `HTTP_PORTS`/`ASPNETCORE_URLS` mismatch warning by using `ASPNETCORE_HTTP_PORTS=8080`.
-- Made authentication/session cookies `SameAsRequest`: the bundled HTTP Docker deployment can authenticate, while HTTPS deployments still receive Secure cookies.
-- Prevented login `returnUrl` open redirects by accepting only local URLs.
-- Changed Google Gemini API-key transport from a URL query parameter to the `x-goog-api-key` header.
-- Made provider capability pricing honor configured `Neura:ModelPricing` overrides for Anthropic, OpenAI, and Google.
-- Made OAuth state single-use and validate provider kinds before token exchange; callback now resolves the signed-in Identity user ID correctly.
-- Added real-mode mission execution: a real mission now loads connected provider accounts belonging to its owner, decrypts credentials through the existing provider factory, and uses a second connected provider as a real handoff fallback when available. Simulation mode remains deterministic and credential-free.
-- Added mission owner identity to the domain model and set it from the authenticated user on mission creation.
-- Persisted mission status transitions to Running/Completed/Failed during orchestration.
-- Hardened the manual Docker sandbox with capability dropping, `no-new-privileges`, and a constrained temporary filesystem while retaining network isolation/resource limits/read-only execution.
-- Kept credentials out of rendered views and out of Google provider URLs.
-- Added this audit file for traceability.
+- Parsed both appsettings files as JSON, the Web/Infrastructure/test project
+  files as XML, and ran `node --check` across the JavaScript files; all passed.
+- Added integration coverage for account confirmation/password-reset tokens,
+  uniform recovery responses, cache headers, account login/recovery rate-limit
+  windows, heartbeat refresh, stale-run recovery, non-retry semantics,
+  production configuration, database secret-file parsing, placeholder password
+  rejection, and rendering persisted simulation output. The .NET tests are
+  unrun here; PostgreSQL assertions require Docker.
+- Reviewed configuration and deployment documentation against the current
+  startup, queue, provider, and persistence paths.
+- Enabled a same-origin script CSP, removed inline scripts/event attributes,
+  self-hosted pinned Cytoscape and SignalR browser builds with license/hash
+  records and SRI, fixed graph pages to load local Cytoscape, and moved graph
+  JSON into HTML-encoded data attributes.
+- Bounded the Knowledge Graph response to 500 nodes/1,000 edges and the live
+  Brain graph to 800 recently active nodes; added an omission notice and
+  controller coverage for the bounded knowledge payload.
+- Added file-backed PostgreSQL/Data Protection/SMTP password support,
+  loopback-only local Compose bindings, and a single-host production Compose
+  example with required image/host/proxy/origin/mail settings and persistent
+  volumes. Both Compose files parse as YAML; static checks confirm secret
+  targets and port containment. Docker Compose config/runtime verification
+  remains unrun because Docker is unavailable.
+- Changed the PostgreSQL Testcontainers test to fail on container startup
+  errors instead of silently returning a passing test without database assertions.
+- Centralized the per-IP global and named quota definitions. Added a Redis
+  Lua-backed distributed fixed-window limiter: global and endpoint counters
+  update atomically, share a Redis Cluster hash slot, expire with their windows,
+  and store only a digest of the normalized client IP. Redis failures fail closed
+  with 503; liveness remains independent. Local ASP.NET Core limits remain the
+  fallback when Redis is not configured. Middleware/fallback tests are added,
+  but the Redis script has not been runtime-tested.
+- Added production email confirmation/password reset, a canonical HTTPS origin,
+  TLS SMTP validation, three-hour Identity tokens, and endpoint-specific per-IP
+  recovery limits. The account-flow integration test uses a capturing sender
+  and is not run here; SMTP still lacks a durable outbox.
+- Added optional OTLP metrics for ASP.NET Core/Kestrel/HTTP-client meters,
+  bounded-cardinality provider execution outcome/latency and successful
+  token/context measurements, neural-event persistence, and SignalR counters/
+  durations. Metric-tag tests are unrun. Task/handoff/database metrics and
+  event/outbox atomicity remain unresolved.
+- Ran tree-sitter syntax parsing for 80 changed/untracked C# files (including
+  files beneath untracked directories) and `node --check` over all application
+  and vendored JavaScript; all passed.
+  `git diff --check` also passes. `npm audit` for the two pinned browser
+  packages returned zero advisories on 2026-10-12. Added middleware and
+  Playwright assertions for CSP behavior, but those .NET tests have not run.
 
-## Verification performed here
+## Not verified here
 
-- XML parsing of all `.csproj` files passed.
-- JSON parsing of `appsettings.json` and `appsettings.example.json` passed.
-- Source inspection found no TODO/FIXME/NotImplementedException placeholders.
-- The environment used for this packaging pass does not contain the .NET SDK or Docker daemon, so a fresh `dotnet build`, test run, and Docker rebuild must still be executed on the user's Windows/Docker Desktop machine.
+- No .NET build, Razor compilation, xUnit run, or Playwright run was
+  performed: the .NET SDK is unavailable in this environment.
+- No Docker image or Compose stack was built or exercised: Docker/Podman are
+  unavailable here.
+- PostgreSQL persistence/concurrency, Redis script atomicity/multi-instance
+  quota behavior, and real provider requests were not runtime-tested here. CI
+  and a deployment-environment smoke test remain release gates.
 
-## First run
+## Current operational caveats
 
-Because the model now adds `Mission.OwnerUserId`, recreate the development database/schema if the existing database was created by an earlier build:
+- No reviewed EF migration baseline or model snapshot is checked in.
+  Development/Testing use `EnsureCreatedAsync` only for disposable databases;
+  Staging/Production fail fast until reviewed migrations are applied, and also
+  require exact `AllowedHosts`, persistent Data Protection storage, an RSA
+  private-key certificate, valid database credentials, canonical HTTPS origin,
+  and TLS-enabled SMTP.
+- Staging/Production require confirmed-email sign-in. Confirmation is POST-only
+  after GET and reset tokens expire after three hours; reset responses are
+  uniform, token pages are non-cacheable, and SMTP delivery is not queued durably.
+- CSP blocks inline scripts, event attributes, and style blocks. Its
+  `style-src-attr` directive still allows inline style attributes for legacy
+  Razor and graph-library handling. Browser validation is required before
+  removing that last inline-style allowance.
+- Queued mission claims are conditional; active runs heartbeat `UpdatedAtUtc`
+  and stale runs are terminally failed without auto-retry. This avoids a stuck
+  `Running` row without risking an automatic duplicate provider side effect,
+  but it is not checkpointed resume or exactly-once execution.
+- Real provider execution requires an owner-configured official API key,
+  enabled agent, matching capability, and an exact supported model ID.
+  Provider OAuth remains disabled by default; refresh-token lifecycle and
+  provider-specific OAuth credential semantics are incomplete.
+- Mission mode is selected per mission. Simulation results are deterministic
+  and explicitly labeled; they are not vendor responses or billable costs.
+- Elevated registration role codes in the checked-in example are empty.
+  Keep real secrets in a secret manager or environment, never Git.
 
-```powershell
+## Fresh development database
+
+The current model may not match a database created by an earlier revision.
+For disposable local Compose data only, stop the stack and remove its
+PostgreSQL volume before starting again:
+
+```bash
 docker compose down -v
-docker compose build --no-cache
-docker compose up
+docker compose up --build
 ```
 
-Do not commit real provider keys, SMTP passwords, OAuth client secrets, or PostgreSQL passwords to the repository.
-
-## V6 CI/test hardening
-
-- Fixed the integration `Register_ThenLogin_Succeeds` test so it performs the real antiforgery cookie + hidden-token handshake instead of intentionally submitting an invalid raw POST. It now verifies registration, authenticated Brain access, logout, fresh login, and authenticated Brain access again.
-- Integration and browser E2E factories use unique EF Core InMemory database names, preventing cross-factory Identity role collisions.
-- Role seeding is idempotent and safely handles a concurrent startup race without hiding unrelated database failures.
-- Neural event persistence failures are logged with `ILogger` instead of being silently swallowed; live orchestration remains non-blocking.
+**This removes all local database data. Never use `down -v` against a
+production or otherwise retained database.** Establish and test reviewed EF
+migrations before such a database is upgraded.

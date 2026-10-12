@@ -28,4 +28,9 @@ public static class NeuralEventTypes
     public const string TaskCompleted = nameof(TaskCompleted);
     public const string TaskFailed = nameof(TaskFailed);
     public const string MissionCompleted = nameof(MissionCompleted);
+    public const string MissionFailed = nameof(MissionFailed);
+    public const string MissionCancelled = nameof(MissionCancelled);
+    public const string ProjectMemoryRetrieved = nameof(ProjectMemoryRetrieved);
+    public const string ProviderFailure = nameof(ProviderFailure);
+    public const string RoutingDecision = nameof(RoutingDecision);
 }

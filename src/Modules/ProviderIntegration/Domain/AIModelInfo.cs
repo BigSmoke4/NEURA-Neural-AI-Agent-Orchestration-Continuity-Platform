@@ -29,4 +29,8 @@ public record AIResponse(
     TimeSpan Latency,
     decimal EstimatedCost,
     bool IsSuccess,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    // Each real provider response is a completed answer by default. A provider
+    // that intentionally supports multi-turn task execution can set this false;
+    // SimulationAIProvider does so while walking through its context ramp.
+    bool IsTaskComplete = true);

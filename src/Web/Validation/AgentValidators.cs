@@ -18,10 +18,14 @@ public sealed class CreateAgentValidator : AbstractValidator<CreateAgentRequest>
     public CreateAgentValidator()
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(120);
-        RuleFor(x => x.ModelId).NotEmpty();
-        RuleFor(x => x.Role).NotEmpty();
-        RuleFor(x => x.ContextCapacityTokens).GreaterThan(0);
-        RuleFor(x => x.Capabilities).NotEmpty()
-            .WithMessage("An agent must declare at least one capability.");
+        RuleFor(x => x.Description).MaximumLength(2_000);
+        RuleFor(x => x.ProviderAccountId).NotEmpty();
+        RuleFor(x => x.ModelId).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Role).NotEmpty().MaximumLength(120);
+        RuleFor(x => x.ContextCapacityTokens).InclusiveBetween(1_000, 10_000_000);
+        RuleFor(x => x.Capabilities)
+            .NotEmpty().WithMessage("An agent must declare at least one capability.")
+            .Must(values => values.All(value => Enum.TryParse<Neura.Modules.AgentManagement.Domain.AgentCapability>(value, true, out var capability) && Enum.IsDefined(capability)))
+            .WithMessage("One or more agent capabilities are not recognized.");
     }
 }

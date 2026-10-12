@@ -28,6 +28,6 @@
     </table>
     @if (!Model.Any())
     {
-        <p class="text-dim">No cost records yet. Real-mode provider adapters return EstimatedCost as 0m as a placeholder — compute it from AIModelCapabilities pricing and write a CostRecord per AI request to populate this screen.</p>
+        <p class="text-dim">No billable provider requests have been recorded yet. Simulation activity is explicitly excluded; real provider usage appears after a mission completes a provider call.</p>
     }
 </section>

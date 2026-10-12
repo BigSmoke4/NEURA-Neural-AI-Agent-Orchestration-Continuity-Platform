@@ -1,26 +1,23 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Neura.Web.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Neura.Infrastructure.Persistence;
 using Neura.Modules.ContextManagement.Domain;
 using Neura.Modules.Observability.Domain;
+using Neura.Modules.Orchestration.Domain;
+using Neura.Web.Security;
 
 namespace Neura.Web.Controllers;
 
 /// <summary>
-/// The real untrusted-content producer the trust-labeling mechanism was
-/// missing: fetches a URL the user supplies and attaches its raw text to
-/// a task via AgentTask.AttachReferenceMaterial(..., UntrustedExternalContent, ...).
-/// This is genuinely external, unsanitized content — exactly the case
-/// ContentTrustLevel exists to guard — flowing into
-/// OrchestrationEngine.BuildTrustSeparatedMessages the next time that
-/// task runs, where it will be rendered as clearly-delimited,
-/// non-authoritative reference material rather than merged into the
-/// instruction stream.
+/// Fetches a public http(s) reference and attaches it as explicitly
+/// untrusted task material. The named HttpClient resolves and connects only
+/// to globally routable IPs and refuses redirects to prevent SSRF.
 /// </summary>
 [Authorize(Policy = "ExecuteMission")]
-[EnableRateLimiting("provider-config")]
+[EnableRateLimiting(NeuraRateLimitPolicies.ProviderConfiguration)]
 public class TaskReferenceController : Controller
 {
     private readonly NeuraDbContext _db;
@@ -41,31 +38,55 @@ public class TaskReferenceController : Controller
         var task = await _db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct);
         if (task is null) return NotFound();
 
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+        var mission = await ResourceScope.Missions(_db.Missions, User)
+            .FirstOrDefaultAsync(m => m.Id == task.MissionId, ct);
+        if (mission is null) return NotFound();
+        if (mission.Status != MissionStatus.Created)
+            return Conflict("Reference material can only be attached before the mission is queued.");
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            (uri.Scheme == Uri.UriSchemeHttp && uri.Port != 80) ||
+            (uri.Scheme == Uri.UriSchemeHttps && uri.Port != 443))
         {
-            ModelState.AddModelError(string.Empty, "Provide a valid absolute http(s) URL.");
-            return RedirectToAction("Index", "Missions");
+            TempData["ReferenceError"] = "Provide a public absolute http(s) URL without embedded credentials or a custom port.";
+            return RedirectToAction("Details", "Missions", new { id = mission.Id });
         }
 
         var client = _httpClientFactory.CreateClient("reference-fetch");
         string text;
         try
         {
-            text = await client.GetStringAsync(uri, ct);
-            if (text.Length > 20_000) text = text[..20_000] + "\n[truncated]";
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.Accept.ParseAdd("text/plain, text/html, application/json;q=0.9, */*;q=0.1");
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct);
+            response.EnsureSuccessStatusCode();
+            text = await response.Content.ReadAsStringAsync(ct);
+            if (text.Length > 20_000)
+                text = text[..20_000] + "\n[truncated by NEURA]";
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            ModelState.AddModelError(string.Empty, $"Could not fetch that URL: {ex.Message}");
-            return RedirectToAction("Index", "Missions");
+            throw;
+        }
+        catch (Exception)
+        {
+            // Do not echo remote response bodies, internal addresses, or
+            // exception details into a user-visible page.
+            TempData["ReferenceError"] = "The reference could not be fetched. The URL must resolve to a public host and return a successful response without redirects.";
+            return RedirectToAction("Details", "Missions", new { id = mission.Id });
         }
 
-        // The whole point: this content is fetched from the open web, so
-        // it is labeled UntrustedExternalContent, never anything higher.
-        task.AttachReferenceMaterial(text, ContentTrustLevel.UntrustedExternalContent, uri.ToString());
+        // Keep only the origin in metadata/audit records. Query strings and
+        // path segments can contain bearer/download tokens and are not needed
+        // to explain where the untrusted material came from.
+        var safeSource = uri.GetLeftPart(UriPartial.Authority);
+        task.AttachReferenceMaterial(text, ContentTrustLevel.UntrustedExternalContent, safeSource);
         await _db.SaveChangesAsync(ct);
-        await _audit.LogAsync(null, "ReferenceMaterialAttached", uri.ToString(), "Success", Guid.NewGuid(), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        await _audit.LogAsync(ResourceScope.UserId(User), "ReferenceMaterialAttached", safeSource, "Success",
+            Guid.NewGuid(), HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
 
-        return RedirectToAction("Index", "Missions");
+        return RedirectToAction("Details", "Missions", new { id = mission.Id });
     }
 }
