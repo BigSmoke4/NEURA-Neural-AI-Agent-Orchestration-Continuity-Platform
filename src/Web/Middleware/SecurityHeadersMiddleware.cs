@@ -1,10 +1,11 @@
 namespace Neura.Web.Middleware;
 
 /// <summary>
-/// Baseline browser security policy. Scripts are self-hosted and same-origin;
-/// inline JavaScript and event-handler attributes are blocked. Inline styles
-/// remain enabled temporarily because existing Razor views and Cytoscape use
-/// style attributes; migrate those to stylesheets before removing that grant.
+/// Baseline browser security policy. Scripts and stylesheets are self-hosted
+/// and same-origin; inline JavaScript, style blocks, and event-handler
+/// attributes are blocked. Style attributes remain enabled temporarily for
+/// existing Razor views; Cytoscape's default container rule is supplied by the
+/// same-origin neural-graph stylesheet instead of a runtime inline style block.
 /// </summary>
 public sealed class SecurityHeadersMiddleware
 {

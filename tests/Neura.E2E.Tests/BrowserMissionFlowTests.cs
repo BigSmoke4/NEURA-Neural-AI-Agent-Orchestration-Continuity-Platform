@@ -52,8 +52,7 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         await page.WaitForFunctionAsync(
             "() => typeof window.cytoscape === 'function' && typeof window.signalR?.HubConnectionBuilder === 'function'",
             options: new PageWaitForFunctionOptions { Timeout = 10_000 });
-        Assert.DoesNotContain(browserErrors,
-            error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase));
+        AssertNoCspErrors(browserErrors);
 
         // Graph pages use self-hosted Cytoscape under the same CSP.
         await page.ClickAsync("a[href='/Context']");
@@ -62,8 +61,7 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         await page.ClickAsync("a[href='/Knowledge']");
         await page.WaitForURLAsync($"{baseUrl}/Knowledge**");
         await page.WaitForFunctionAsync("() => typeof window.cytoscape === 'function'");
-        Assert.DoesNotContain(browserErrors,
-            error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase));
+        AssertNoCspErrors(browserErrors);
 
         // 2. Navigate through the rendered navigation.
         await page.ClickAsync("a[href='/Missions']");
@@ -86,6 +84,15 @@ public class BrowserMissionFlowTests : IAsyncLifetime
         // 4. Click the real Start button rendered on that page.
         await page.ClickAsync("button:has-text('Start')");
         await page.WaitForURLAsync($"{baseUrl}/Missions/Details/**");
+    }
+
+    private static void AssertNoCspErrors(IEnumerable<string> browserErrors)
+    {
+        var violations = browserErrors
+            .Where(error => error.Contains("Content Security Policy", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        Assert.True(violations.Length == 0,
+            $"Browser reported CSP errors:{Environment.NewLine}{string.Join(Environment.NewLine, violations)}");
     }
 
     private static async Task ExpectTextAsync(IPage page, string text)

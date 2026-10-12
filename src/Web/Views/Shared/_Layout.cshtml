@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="~/css/buttons.css" />
     <link rel="stylesheet" href="~/css/forms.css" />
     <link rel="stylesheet" href="~/css/tables.css" />
-    <link rel="stylesheet" href="~/css/neural-graph.css" />
+    <!-- Cytoscape checks this id before injecting its default inline container rule; keep the rule in the same-origin stylesheet. -->
+    <link id="__________cytoscape_stylesheet" rel="stylesheet" href="~/css/neural-graph.css" />
     <link rel="stylesheet" href="~/css/dashboard.css" />
     <link rel="stylesheet" href="~/css/responsive.css" />
     <link rel="stylesheet" href="~/css/site.css" />
